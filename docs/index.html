@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>88API 用量挂件 · 桌面灵动岛</title>
+<style>
+  :root{
+    --bg:#0b0b0f; --panel:#141419; --line:rgba(255,255,255,.08);
+    --txt:#f5f5f7; --mut:#8e8e93; --gold:#f5c451;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:radial-gradient(900px 500px at 50% -10%,#1c1c24 0%,var(--bg) 60%);
+    color:var(--txt);font-family:-apple-system,"SF Pro Display","SF Pro Text","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.6;min-height:100vh;padding:56px 20px 64px}
+  .wrap{max-width:820px;margin:0 auto}
+  header{text-align:center;margin-bottom:40px}
+  .logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(160deg,#2a2a32,#141419);
+    border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px}
+  .logo i{width:14px;height:14px;border-radius:50%;background:var(--gold);box-shadow:0 0 14px rgba(245,196,81,.8)}
+  h1{font-size:30px;font-weight:700;letter-spacing:-.5px}
+  header p{margin-top:8px;color:var(--mut);font-size:15px}
+  .hero{margin:0 auto 48px;text-align:center}
+  .hero img{width:384px;max-width:100%;border-radius:26px;box-shadow:0 24px 60px rgba(0,0,0,.6);
+    border:1px solid var(--line)}
+  .caption{margin-top:14px;color:var(--mut);font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:44px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px}
+  .card .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);margin-bottom:12px;box-shadow:0 0 10px rgba(245,196,81,.7)}
+  .card h3{font-size:15px;font-weight:600;margin-bottom:6px}
+  .card p{font-size:13px;color:var(--mut)}
+  .cta{text-align:center}
+  .btn{display:inline-block;background:var(--gold);color:#1a1405;font-weight:600;font-size:14px;
+    padding:12px 28px;border-radius:12px;text-decoration:none;transition:transform .15s ease,opacity .15s ease}
+  .btn:hover{transform:translateY(-1px);opacity:.92}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line);margin-left:10px}
+  .btn.ghost:hover{border-color:rgba(255,255,255,.22)}
+  footer{margin-top:56px;text-align:center;color:#5c5c64;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><i></i></div>
+    <h1>88API 用量挂件</h1>
+    <p>桌面灵动岛 · 实时监控余额 / Token 消耗 / 模型调用明细</p>
+  </header>
+
+  <div class="hero">
+    <img src="../widget/preview.png" alt="88API 用量挂件预览" />
+    <div class="caption">挂件卡片形态（示例数据，非真实账户）</div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="dot"></div><h3>灵动岛吸附</h3><p>拖到屏幕顶部中间自动收成胶囊，悬停展开完整信息，双击恢复卡片。</p></div>
+    <div class="card"><div class="dot"></div><h3>实时余额与 Token</h3><p>轮询 new-api 只读接口，余额、今日/累计 token 消耗实时刷新。</p></div>
+    <div class="card"><div class="dot"></div><h3>模型调用轮播</h3><p>「今日调用 / 总计调用」具体模型次数 5 秒自动切换，含金额与占比条。</p></div>
+    <div class="card"><div class="dot"></div><h3>零依赖 · 本地落盘</h3><p>纯 ESM + Electron，无需 npm install；消费明细长期存本地，不依赖站点保留期。</p></div>
+  </div>
+
+  <div class="cta">
+    <a class="btn" href="https://github.com/mingmoumou/88api-usage">GitHub 仓库</a>
+    <a class="btn ghost" href="https://github.com/mingmoumou/88api-usage#readme">查看说明</a>
+  </div>
+
+  <footer>88API 用量挂件 · 苹果灵动岛风格 · 数据仅本地保存，不采集、不上传账户信息</footer>
+</div>
+</body>
+</html>
