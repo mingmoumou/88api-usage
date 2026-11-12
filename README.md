@@ -46,10 +46,10 @@ node run.mjs watch 10
 node run.mjs serve 8788
 ```
 
-Windows 上用 DSH 自带的 node：
+Windows 上（装了 Node.js 后直接用 `node`）：
 
 ```powershell
-& "C:\Users\23572\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe" run.mjs serve 8788
+node run.mjs serve 8788
 ```
 
 产出：
@@ -100,7 +100,7 @@ Windows 上用 DSH 自带的 node：
 桌面快捷方式指向 `electron.exe` + `widget` 目录；挂件已在运行时双击它只会把已有窗口提到前面（单实例锁），不会开第二份。
 图标不直接引用工作区里的 `.ico`：`create-shortcut.ps1` 会把它复制到 `%LOCALAPPDATA%\88api-widget\icon.ico` 再让快捷方式指过去——桌面/资源管理器读不到工作区路径下的图标文件（沙箱 ACL），直接引用会在桌面上显示成空白文件图标。
 
-用的是 DSH 自带的 `C:\Users\23572\.dsh\electron\electron.exe`，不需要 `npm install`。
+Electron 通过 `npm install` 安装（或设环境变量 `API88_ELECTRON` 指向已有的 electron.exe），启动脚本会自动查找。
 
 注意：
 - 挂件和 `run.mjs serve` **不要同时跑**，两者都会写 `data/logs.jsonl`。

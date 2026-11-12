@@ -2,12 +2,15 @@
 $ErrorActionPreference = 'Stop'
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
+$localElectron = Join-Path $root 'widget\node_modules\electron\dist\electron.exe'
 if ($env:API88_ELECTRON -and (Test-Path $env:API88_ELECTRON)) {
     $exe = $env:API88_ELECTRON
+} elseif (Test-Path $localElectron) {
+    $exe = $localElectron
 } elseif (Test-Path 'C:\Users\23572\.dsh\electron\electron.exe') {
     $exe = 'C:\Users\23572\.dsh\electron\electron.exe'
 } else {
-    throw '找不到 electron.exe，请设置环境变量 API88_ELECTRON 指向它'
+    throw '找不到 electron.exe：请在 widget 目录执行 npm install，或设置环境变量 API88_ELECTRON 指向它'
 }
 $widget = Join-Path $root 'widget'
 $srcIcon = Join-Path $root 'widget\88api.ico'
