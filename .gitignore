@@ -11,6 +11,8 @@ widget/debug.log
 
 # 自检截图产物
 widget/shot_*.png
+widget/preview_card.png
+widget/preview_token.png
 
 # 工作区本地数据
 .workbuddy/

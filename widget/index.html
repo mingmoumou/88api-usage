@@ -87,20 +87,36 @@
   .empty{color:#55555c;font-size:11px;text-align:center;padding:4px 0}
 
   /* 令牌配置面板（缺少令牌时覆盖显示） */
-  .token{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;gap:11px;
-    padding:24px;background:var(--bg);border-radius:26px;z-index:5}
+  .token{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;gap:14px;
+    padding:26px 22px;background:#101014;border-radius:26px;z-index:5;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
   body[data-token="1"] .token{display:flex}
-  .token .tk{font-size:15px;font-weight:600;color:#fff}
-  .token .td{font-size:11px;color:var(--mut);line-height:1.55}
-  .token input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
-    border-radius:10px;padding:10px 12px;color:#fff;font-size:12px;font-family:inherit;outline:none;
-    -webkit-app-region:no-drag}
-  .token input:focus{border-color:rgba(245,196,81,.55)}
-  .token .trow{display:flex;gap:8px;align-items:center}
-  .token .tbtn{background:var(--gold);color:#1a1405;font-weight:600;font-size:12px;
-    padding:9px 16px;border-radius:10px;border:0;cursor:pointer;-webkit-app-region:no-drag}
-  .token .tlink{font-size:11px;color:var(--gold);text-decoration:none;cursor:pointer;
-    -webkit-app-region:no-drag}
+  .token .tk{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:650;color:#fff}
+  .tk-ico{width:19px;height:19px;flex:0 0 auto;color:var(--gold)}
+  .token .td{font-size:12px;color:#9a9aa0;line-height:1.6}
+  .token .td b{color:#d1d1d6;font-weight:600}
+  .tin{position:relative;display:flex;align-items:center}
+  .token input{flex:1;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;padding:12px 40px 12px 14px;color:#fff;font-size:13px;font-family:inherit;outline:none;
+    -webkit-app-region:no-drag;transition:border-color .15s var(--ease),background .15s var(--ease)}
+  .token input::placeholder{color:#6e6e73}
+  .token input:focus{border-color:rgba(245,196,81,.55);background:rgba(255,255,255,.08)}
+  .teye{position:absolute;right:8px;width:28px;height:28px;border-radius:8px;color:#8e8e93;
+    display:flex;align-items:center;justify-content:center;-webkit-app-region:no-drag}
+  .teye:hover{color:#f5f5f7;background:rgba(255,255,255,.08)}
+  .trow{display:flex;gap:10px;align-items:center}
+  .tbtn{flex:1;background:var(--gold);color:#1a1405;font-weight:650;font-size:13px;
+    padding:11px 0;border-radius:12px;border:0;cursor:pointer;-webkit-app-region:no-drag;
+    transition:opacity .15s var(--ease),transform .15s var(--ease)}
+  .tbtn:hover{opacity:.92}
+  .tbtn:active{transform:scale(.98)}
+  .tbtn2{flex:1;background:transparent;color:#d1d1d6;font-weight:600;font-size:12px;
+    padding:11px 0;border-radius:12px;border:1px solid rgba(255,255,255,.14);cursor:pointer;
+    -webkit-app-region:no-drag;transition:border-color .15s var(--ease),color .15s var(--ease)}
+  .tbtn2:hover{border-color:rgba(255,255,255,.28);color:#fff}
+  .tmsg{font-size:11px;min-height:14px;color:var(--mut);text-align:center}
+  .tmsg.ok{color:var(--green)}
+  .tmsg.err{color:var(--red)}
 
   /* ============ 灵动岛胶囊视图（island） ============ */
   .island{height:100%;display:none;align-items:center;gap:11px;
@@ -132,13 +148,28 @@
 <!-- 完整卡片 -->
 <div class="card" id="card">
   <div class="token" id="tokenPanel">
-    <div class="tk">配置访问令牌</div>
-    <div class="td">需要 88API 的只读「访问令牌」才能拉取余额和消费数据。</div>
-    <input id="tokenInput" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" />
+    <div class="tk">
+      <svg class="tk-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="5" y="11" width="14" height="9" rx="2"/>
+        <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+      </svg>
+      <span>配置访问令牌</span>
+    </div>
+    <div class="td">需要 88API 的只读 <b>访问令牌</b> 才能拉取余额和消费数据。</div>
+    <div class="tin">
+      <input id="tokenInput" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" />
+      <button class="teye" id="tokenEye" title="显示/隐藏">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
     <div class="trow">
       <button class="tbtn" id="tokenSave">保存并开始</button>
-      <a class="tlink" id="tokenLink">去 88api.ai 获取令牌 →</a>
+      <button class="tbtn2" id="tokenLink">去 88api.ai 获取令牌</button>
     </div>
+    <div class="tmsg" id="tokenMsg"></div>
   </div>
   <div class="hd">
     <span class="logo"></span>
@@ -338,12 +369,22 @@
   });
 
   // ---- 令牌配置 ----
+  const showTokenMsg = (t, cls) => {
+    const m = $('tokenMsg');
+    m.textContent = t;
+    m.className = 'tmsg' + (cls ? ' ' + cls : '');
+  };
   $('tokenSave').addEventListener('click', () => {
     const v = $('tokenInput').value.trim();
-    if (!v) return;
+    if (!v) { showTokenMsg('请先粘贴访问令牌', 'err'); return; }
     window.widget.act('set-token', v);
+    showTokenMsg('已保存，正在拉取数据…', 'ok');
   });
   $('tokenLink').addEventListener('click', () => window.widget.act('open-token-page'));
+  $('tokenEye').addEventListener('click', () => {
+    const inp = $('tokenInput');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
   $('tokenInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') $('tokenSave').click();
   });
