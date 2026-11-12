@@ -20,17 +20,18 @@
 
 费用换算：`金额 = quota / 500000`（与站点钱包页一致）。
 
-### 首次配置（绑定你的 88api 账号）
+### 安装与首次配置（别人接入，三步搞定）
 
-鉴权只要一个只读「访问令牌」（不是 API Key），只能查余额与消费日志，不能付费生成、不产生费用。
+> 依赖：Node.js（含 npm，装 Electron 用）+ Electron。挂件代码本身零依赖、无需编译。
 
-1. 登录 [88api.ai](https://88api.ai) → **安全与访问 → 访问令牌** → 点「创建访问令牌」，权限只勾选「查看」类，复制完整令牌。
-2. 把项目根目录的 `auth.example.json` 复制成 `auth.json`，把令牌粘进 `accessToken`：
-   ```json
-   { "accessToken": "你的访问令牌", "userId": "" }
+1. **装 Electron**（在项目 `widget` 目录执行）：
+   ```bash
+   cd widget && npm install
    ```
-   `userId` 留空即可（程序会通过 `/api/user/self` 自动识别）；也可用环境变量 `API88_ACCESS_TOKEN` 覆盖。
-3. 双击 `打开挂件.bat`，挂件即用你的账号数据运行。`auth.json` 已被 git 忽略，不会被提交到公开仓库。
+2. **绑定账号**：登录 [88api.ai](https://88api.ai) → **安全与访问 → 访问令牌** → 创建（权限只勾选「查看」）→ 复制令牌；把根目录的 `auth.example.json` 复制成 `auth.json`，把令牌粘进 `accessToken`（`userId` 留空，程序会通过 `/api/user/self` 自动识别）。
+3. **运行**：双击 `打开挂件.bat`。
+
+启动脚本会按「环境变量 `API88_ELECTRON` → 项目内 `node_modules` → 默认路径」顺序查找 electron.exe，找不到会明确提示，不会静默失败。`auth.json` 已被 git 忽略，不会提交到公开仓库。
 
 ## 2. 用法
 

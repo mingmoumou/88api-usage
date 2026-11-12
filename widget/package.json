@@ -2,5 +2,8 @@
   "name": "api88-usage-widget",
   "version": "1.0.0",
   "private": true,
-  "main": "main.js"
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "^43.3.0"
+  }
 }
