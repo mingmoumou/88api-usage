@@ -81,7 +81,11 @@
   .mfill{height:100%;border-radius:2px;background:linear-gradient(90deg,rgba(245,196,81,.5),var(--gold))}
   .mcost{font-variant-numeric:tabular-nums;color:#e4d3a4;font-weight:600}
 
-  .ft{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center}
+  .ft{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .dots{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+  .dot-item{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.22);cursor:pointer;
+    transition:background .2s var(--ease),width .2s var(--ease);-webkit-app-region:no-drag}
+  .dot-item.on{background:var(--gold);width:16px;border-radius:4px}
   .upd{font-size:10px;color:#6e6e73;font-variant-numeric:tabular-nums}
   .upd.err{color:var(--red)}
   .empty{color:#55555c;font-size:11px;text-align:center;padding:4px 0}
@@ -134,6 +138,8 @@
   .i-tok{display:flex;align-items:baseline;gap:5px;flex:0 0 auto}
   .i-tok .k{font-size:10.5px;color:var(--mut)}
   .i-tok b{font-size:15px;font-weight:650;color:#f5f5f7;font-variant-numeric:tabular-nums}
+  .i-site{font-size:10px;color:#c7c7cc;flex:0 0 auto;padding:2px 7px;border-radius:6px;
+    background:rgba(255,255,255,.07);letter-spacing:.2px}
   .i-live{width:5px;height:5px;border-radius:50%;background:var(--green);flex:0 0 auto;margin-left:auto;
     animation:pulse 2s ease-in-out infinite}
   .i-live.off{background:var(--red);animation:none}
@@ -219,7 +225,10 @@
     </div>
   </div>
 
-  <div class="ft"><span class="upd" id="upd"></span></div>
+  <div class="ft">
+    <div class="dots" id="dots"></div>
+    <span class="upd" id="upd"></span>
+  </div>
 </div>
 
 <!-- 灵动岛胶囊 -->
@@ -228,6 +237,7 @@
   <span class="i-bal"><i id="iCur">¥</i><b id="iBal">--</b></span>
   <span class="i-sep"></span>
   <span class="i-tok"><span class="k">token</span><b id="iTok">--</b></span>
+  <span class="i-site" id="iSite"></span>
   <span class="i-live" id="iLive"></span>
 </div>
 
@@ -270,7 +280,6 @@
       rate = p.settings.exchangeRate || 1;
       symbol = p.settings.symbol || symbol;
       $('cur').textContent = symbol;
-      $('iCur').textContent = symbol;
     }
     document.body.setAttribute('data-token', p && p.needToken ? '1' : '0');
     if (p && p.empty) {
@@ -285,7 +294,6 @@
     const liveOn = !!p.ok;
     $('live').classList.toggle('off', !liveOn);
     $('liveTxt').textContent = liveOn ? '实时' : '离线';
-    $('iLive').classList.toggle('off', !liveOn);
 
     const money = (q) => (q / per) * price * rate;
 
@@ -298,10 +306,7 @@
     $('todayReq').textContent = fmtInt(t.requests || 0);
     $('todayTok').textContent = fmtTok(todayTokens);
 
-    // 灵动岛胶囊：余额 + 今日 token
-    if (p.account) $('iBal').textContent = fmtMoney(money(p.account.quota));
-    $('iTok').textContent = fmtTok(todayTokens);
-
+    // 灵动岛胶囊：余额 + 今日 token（见 renderIsland，多站点轮播时单独更新）
     const h = p.hourly || [];
     const d = p.daily || [];
     const hSum = h.reduce((a, b) => a + b, 0);
@@ -340,11 +345,78 @@
     upd.title = p.ok ? '' : (p.error || '');
   }
 
-  // ---- 形态切换 ----
-  function setMode(m) { document.body.setAttribute('data-mode', m); }
+  // ---- 形态切换 + 多站点 ----
+  let curMode = 'card';
+  let allSites = [];
+  let curIdx = 0;
+  let islandIdx = 0;
+  function setMode(m) { curMode = m; document.body.setAttribute('data-mode', m); }
   window.widget.onMode(setMode);
-  // 数据里也带 mode，兜底对齐
-  window.widget.onData((p) => { if (p && p.mode) setMode(p.mode); render(p); });
+
+  // 渲染灵动岛（单站点：余额 + token + 站点名）
+  function renderIsland(p) {
+    if (!p || p.empty || !p.ok) {
+      $('iBal').textContent = '--';
+      $('iTok').textContent = '--';
+      $('iSite').textContent = '';
+      $('iLive').classList.add('off');
+      return;
+    }
+    const sPer = (p.settings && p.settings.quotaPerUnit) || 1;
+    const sPrice = (p.settings && p.settings.price) || 1;
+    const sRate = (p.settings && p.settings.exchangeRate) || 1;
+    const sSym = (p.settings && p.settings.symbol) || '¥';
+    const money = (q) => (q / sPer) * sPrice * sRate;
+    const t = p.today || {};
+    const todayTokens = (t.prompt || 0) + (t.completion || 0);
+    $('iCur').textContent = sSym;
+    $('iBal').textContent = fmtMoney(money(p.account ? p.account.quota : 0));
+    $('iTok').textContent = fmtTok(todayTokens);
+    $('iSite').textContent = p.site === 'apimart' ? 'APIMart' : '88API';
+    $('iLive').classList.toggle('off', !p.ok);
+  }
+
+  // 站点圆点选择器
+  function renderDots() {
+    const dots = $('dots');
+    if (!dots) return;
+    if (allSites.length <= 1) { dots.style.display = 'none'; return; }
+    dots.style.display = 'flex';
+    dots.innerHTML = allSites.map((s, i) => `<span class="dot-item${i === curIdx ? ' on' : ''}" data-i="${i}"></span>`).join('');
+    dots.querySelectorAll('.dot-item').forEach((d) => {
+      d.addEventListener('click', () => window.widget.act('switch-site', Number(d.dataset.i)));
+    });
+  }
+
+  function renderCurrent() {
+    const cur = allSites[curIdx] || allSites[0];
+    if (cur) {
+      if (cur.mode) setMode(cur.mode);
+      render(cur);
+      renderIsland(cur);
+    }
+  }
+
+  window.widget.onData((p) => {
+    if (p && p.sites) {
+      allSites = p.sites;
+      curIdx = p.current || 0;
+      islandIdx = curIdx;
+      renderCurrent();
+      renderDots();
+    } else if (p) {
+      render(p);
+      renderIsland(p);
+    }
+  });
+
+  // 灵动岛多站点轮播（5 秒切换，带站点标注）
+  setInterval(() => {
+    if (curMode === 'island' && allSites.length > 1) {
+      islandIdx = (islandIdx + 1) % allSites.length;
+      renderIsland(allSites[islandIdx]);
+    }
+  }, 5000);
 
   // ---- 悬停展开 / 移出收回（灵动岛态） ----
   let hovTimer = null;

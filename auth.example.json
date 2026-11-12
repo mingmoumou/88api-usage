@@ -1,4 +1,5 @@
 {
   "accessToken": "",
-  "userId": ""
+  "userId": "",
+  "apimart": { "apiKey": "" }
 }

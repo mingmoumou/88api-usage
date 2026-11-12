@@ -16,7 +16,7 @@ const DEMO = !!process.env.API88_WIDGET_DEMO;
 const TZ = 'Asia/Shanghai';
 
 // 灵动岛尺寸（胶囊 / 悬停展开态）。卡片尺寸用 state.w × state.h（用户可拖角改）。
-const ISLAND = { w: 250, h: 52 };
+const ISLAND = { w: 300, h: 52 };
 const EXPANDED = { w: 384, h: 340 };
 
 const DBG = path.join(HERE, 'debug.log');
@@ -43,6 +43,11 @@ let hover = false;
 let cardPos = null;         // 吸附前卡片的位置（从灵动岛恢复用）
 let animTimer = null;
 let animating = false;
+
+// ---- 站点状态（多站点：88api / apimart）----
+let sites = [];             // 启用的站点 [{ id, name, type, apiKey }]
+let siteData = {};          // id -> 站点数据（lastGood 格式）
+let currentSite = 0;        // 当前选中站点索引
 
 let state = { x: null, y: null, w: 384, h: 340, poll: 15, pinned: true };
 try { Object.assign(state, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); } catch { /* 首次运行用默认值 */ }
@@ -150,6 +155,41 @@ async function pull() {
   return { all, account, added: fresh.length };
 }
 
+// 读取启用的站点配置：88api（有访问令牌）+ apimart（auth.json 里配了 apiKey）
+function loadSiteConfigs(sync) {
+  const out = [];
+  try { sync.loadAuth(); out.push({ id: '88api', name: '88API', type: '88api' }); } catch { /* 无 88api 令牌 */ }
+  try {
+    const file = path.join(ROOT, 'auth.json');
+    if (fs.existsSync(file)) {
+      const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (cfg.apimart && cfg.apimart.apiKey) out.push({ id: 'apimart', name: 'APIMart', type: 'apimart', apiKey: String(cfg.apimart.apiKey).trim() });
+    }
+  } catch { /* 无 apimart 配置 */ }
+  return out;
+}
+
+// 88api 站点：拉日志 + 聚合（现有逻辑）
+async function tick88api(sync, report) {
+  const { all, account, added } = await pull();
+  const agg = report.aggregate(all, settings);
+  const meta = { updatedAt: new Date().toISOString(), totalRows: all.length, account };
+  report.writeAll(STORE, all, settings, meta, { html: true, refreshSec: 30 });
+  return {
+    site: '88api', ok: true, settings, account, mode, updatedAt: meta.updatedAt,
+    today: agg.today, total: agg.total, avgCost: agg.avgCost,
+    models: agg.models.slice(0, 4), modelsToday: agg.modelsToday.slice(0, 3),
+    recent: agg.recent.slice(0, 2), hourly: hourly(all, settings), daily: daily(all, settings),
+    rows: all.length, added, pinned: win ? win.isAlwaysOnTop() : true, pollSec: state.poll,
+  };
+}
+
+// APIMart 站点：查余额 + 用量聚合
+async function tickApimart(site) {
+  const mod = await import(pathToFileURL(path.join(ROOT, 'apimart.mjs')).href);
+  return await mod.pullApimart(site.apiKey);
+}
+
 // 把用户在界面上粘贴的访问令牌写入项目根 auth.json，立即生效
 function setToken(token) {
   const t = String(token || '').trim();
@@ -179,56 +219,69 @@ async function capture() {
   app.quit();
 }
 
+function demoPayload() {
+  if (process.env.API88_WIDGET_NEEDTOKEN) {
+    return { sites: [{ ok: false, site: '88api', mode: 'card', error: '缺少 88API 访问令牌：请创建 auth.json 或在界面粘贴令牌', empty: true, needToken: true }], current: 0 };
+  }
+  const d1 = demoData();
+  const d2 = demoData();
+  d2.site = 'apimart';
+  d2.settings = { ...d2.settings, symbol: 'C', systemName: 'APIMart' };
+  d2.account = { quota: 36155.97, usedQuota: 64.02, username: '' };
+  d2.today = { requests: 95, prompt: 880120, completion: 201300, cache: 0, quota: 18.44 };
+  d2.total = { requests: 165, prompt: 0, completion: 0, cache: 0, quota: 64.02 };
+  d2.models = [
+    { model: 'gpt-image-2-official', requests: 39, quota: 18.44 },
+    { model: 'claude-sonnet-4.5', requests: 28, quota: 9.1 },
+    { model: 'sora-2-pro', requests: 16, quota: 3.2 },
+  ];
+  d2.modelsToday = [
+    { model: 'gpt-image-2-official', requests: 22, quota: 8.1 },
+    { model: 'claude-sonnet-4.5', requests: 18, quota: 6.2 },
+  ];
+  return { sites: [d1, d2], current: 0 };
+}
+
 async function tick() {
   if (busy) return;
   busy = true;
   tickAt = Date.now();
   try {
     if (DEMO) {
-      if (process.env.API88_WIDGET_NEEDTOKEN) {
-        const payload = { ok: false, mode: 'card', error: '缺少 88API 访问令牌：请创建 auth.json 或在界面粘贴令牌', empty: true, needToken: true };
-        if (win && !win.isDestroyed()) win.webContents.send('data', payload);
-        if (SHOT) setTimeout(() => capture(), 800);
-        return;
-      }
-      lastGood = demoData();
-      if (win && !win.isDestroyed()) win.webContents.send('data', lastGood);
+      const payload = demoPayload();
+      if (win && !win.isDestroyed()) win.webContents.send('data', payload);
       if (SHOT) setTimeout(() => capture(), 800);
       return;
     }
-    const { report } = await loadMods();
-    const { all, account, added } = await pull();
-    const agg = report.aggregate(all, settings);
-    const meta = { updatedAt: new Date().toISOString(), totalRows: all.length, account };
-    report.writeAll(STORE, all, settings, meta, { html: true, refreshSec: 30 });
-
-    lastGood = {
-      ok: true,
-      settings,
-      account,
-      mode,
-      updatedAt: meta.updatedAt,
-      today: agg.today,
-      total: agg.total,
-      avgCost: agg.avgCost,
-      models: agg.models.slice(0, 4),
-      modelsToday: agg.modelsToday.slice(0, 3),
-      recent: agg.recent.slice(0, 2),
-      hourly: hourly(all, settings),
-      daily: daily(all, settings),
-      rows: all.length,
-      added,
-      pinned: win ? win.isAlwaysOnTop() : true,
-      pollSec: state.poll,
-    };
-    if (win && !win.isDestroyed()) win.webContents.send('data', lastGood);
+    const { sync, report } = await loadMods();
+    sites = loadSiteConfigs(sync);
+    if (!sites.length) {
+      const payload = { sites: [{ ok: false, site: '88api', mode, error: '缺少 88API 访问令牌', empty: true, needToken: true }], current: 0 };
+      if (win && !win.isDestroyed()) win.webContents.send('data', payload);
+      return;
+    }
+    for (const site of sites) {
+      try {
+        siteData[site.id] = site.type === '88api'
+          ? await tick88api(sync, report)
+          : await tickApimart(site);
+      } catch (e) {
+        const msg = String(e && e.message || e);
+        const needToken = msg.includes('缺少 88API 访问令牌');
+        const prev = siteData[site.id];
+        siteData[site.id] = prev
+          ? { ...prev, ok: false, error: msg }
+          : { ok: false, site: site.id, mode, error: msg, empty: true, needToken };
+      }
+    }
+    if (currentSite >= sites.length) currentSite = 0;
+    const payload = { sites: sites.map(s => siteData[s.id]), current: currentSite };
+    lastGood = siteData[sites[currentSite].id];
+    if (win && !win.isDestroyed()) win.webContents.send('data', payload);
     if (SHOT) setTimeout(() => capture(), 1200);
   } catch (e) {
     const msg = String(e && e.message || e);
-    const needToken = msg.includes('缺少 88API 访问令牌');
-    const payload = lastGood
-      ? { ...lastGood, ok: false, error: msg, needToken }
-      : { ok: false, mode, error: msg, empty: true, needToken };
+    const payload = { sites: [{ ok: false, site: '88api', mode, error: msg, empty: true, needToken: msg.includes('缺少') }], current: 0 };
     if (win && !win.isDestroyed()) win.webContents.send('data', payload);
   } finally {
     busy = false;
@@ -448,6 +501,14 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'restore') restoreCard();
   else if (name === 'set-token') setToken(arg);
   else if (name === 'open-token-page') shell.openExternal('https://88api.ai');
+  else if (name === 'switch-site') {
+    const i = Number(arg);
+    if (sites.length && i >= 0 && i < sites.length) {
+      currentSite = i;
+      const payload = { sites: sites.map(s => siteData[s.id]), current: currentSite };
+      if (win && !win.isDestroyed()) win.webContents.send('data', payload);
+    }
+  }
 });
 
 // ---------- 托盘 ----------

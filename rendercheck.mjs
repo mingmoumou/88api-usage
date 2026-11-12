@@ -76,9 +76,11 @@ const code = html.split('<script>')[1].split('</script>')[0];
 vm.createContext(sandbox);
 vm.runInContext(code, sandbox);
 const render = sandbox.render;
+const renderIsland = sandbox.renderIsland;
 if (typeof render !== 'function') throw new Error('render 未定义');
 
 render(payload);
+if (typeof renderIsland === 'function') renderIsland(payload);
 const out = {
   cur: el('cur').textContent,
   bal: el('bal').textContent,
@@ -95,6 +97,7 @@ const out = {
   iBal: el('iBal').textContent,
   iTok: el('iTok').textContent,
   iCur: el('iCur').textContent,
+  iSite: el('iSite').textContent,
   mTodayRows: (el('mListToday').innerHTML.match(/class="mrow"/g) || []).length,
   mTodayHead: el('mListToday').innerHTML.slice(0, 220).replace(/\s+/g, ' '),
   mTotalRows: (el('mListTotal').innerHTML.match(/class="mrow"/g) || []).length,
