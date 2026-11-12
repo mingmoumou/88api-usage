@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('widget', {
   onData: (cb) => ipcRenderer.on('data', (_e, payload) => cb(payload)),
   onPinned: (cb) => ipcRenderer.on('pinned', (_e, v) => cb(v)),
   onMode: (cb) => ipcRenderer.on('mode', (_e, m) => cb(m)),
+  onOpenConfig: (cb) => ipcRenderer.on('open-config', () => cb()),
   act: (name, arg) => ipcRenderer.send('action', name, arg),
 });

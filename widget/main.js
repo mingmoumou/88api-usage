@@ -190,19 +190,19 @@ async function tickApimart(site) {
   return await mod.pullApimart(site.apiKey);
 }
 
-// 把用户在界面上粘贴的访问令牌写入项目根 auth.json，立即生效
-function setToken(token) {
-  const t = String(token || '').trim();
-  if (!t) return;
+// 把用户在界面上粘贴的站点凭据写入项目根 auth.json，立即生效
+function setConfig(cfg) {
   const file = path.join(ROOT, 'auth.json');
   try {
-    const cfg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
-    cfg.accessToken = t;
-    if (!cfg.userId) cfg.userId = '';
-    fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
+    const cur = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+    const accessToken = String(cfg && cfg.accessToken || '').trim();
+    const apimartKey = String(cfg && cfg.apimartKey || '').trim();
+    if (accessToken) { cur.accessToken = accessToken; if (cur.userId === undefined) cur.userId = ''; }
+    if (apimartKey) cur.apimart = { apiKey: apimartKey };
+    fs.writeFileSync(file, JSON.stringify(cur, null, 2));
     tick();
   } catch (e) {
-    log('set-token failed', e);
+    log('set-config failed', e);
   }
 }
 
@@ -474,6 +474,7 @@ function openMenu() {
       })),
     },
     { label: '立即刷新', click: () => tick() },
+    { label: '配置站点凭据', click: () => { if (win && !win.isDestroyed()) win.webContents.send('open-config'); } },
     { type: 'separator' },
     { label: mode === 'card' ? '收起为灵动岛' : '恢复为卡片', click: () => { if (mode === 'card') snapToIsland(); else restoreCard(); } },
     { label: '打开完整看板', click: () => shell.openPath(path.join(ROOT, 'dashboard.html')) },
@@ -499,8 +500,9 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'menu') openMenu();
   else if (name === 'hover') setHover(!!arg);
   else if (name === 'restore') restoreCard();
-  else if (name === 'set-token') setToken(arg);
-  else if (name === 'open-token-page') shell.openExternal('https://88api.ai');
+  else if (name === 'set-config') setConfig(arg);
+  else if (name === 'open-88api') shell.openExternal('https://88api.ai');
+  else if (name === 'open-apimart') shell.openExternal('https://apimart.ai/keys');
   else if (name === 'switch-site') {
     const i = Number(arg);
     if (sites.length && i >= 0 && i < sites.length) {

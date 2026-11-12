@@ -91,14 +91,18 @@
   .empty{color:#55555c;font-size:11px;text-align:center;padding:4px 0}
 
   /* 令牌配置面板（缺少令牌时覆盖显示） */
-  .token{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;gap:14px;
-    padding:26px 22px;background:#101014;border-radius:26px;z-index:5;
+  .token{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;gap:10px;
+    padding:20px 22px;background:#101014;border-radius:26px;z-index:5;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
   body[data-token="1"] .token{display:flex}
   .token .tk{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:650;color:#fff}
   .tk-ico{width:19px;height:19px;flex:0 0 auto;color:var(--gold)}
   .token .td{font-size:12px;color:#9a9aa0;line-height:1.6}
   .token .td b{color:#d1d1d6;font-weight:600}
+  .tfield{display:flex;flex-direction:column;gap:6px}
+  .tlabel{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#9a9aa0}
+  .tget{font-size:10px;color:var(--gold);cursor:pointer;-webkit-app-region:no-drag}
+  .tget:hover{opacity:.85}
   .tin{position:relative;display:flex;align-items:center}
   .token input{flex:1;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
     border-radius:12px;padding:12px 40px 12px 14px;color:#fff;font-size:13px;font-family:inherit;outline:none;
@@ -159,21 +163,38 @@
         <rect x="5" y="11" width="14" height="9" rx="2"/>
         <path d="M8 11V7a4 4 0 0 1 8 0v4"/>
       </svg>
-      <span>配置访问令牌</span>
+      <span>配置站点凭据</span>
     </div>
-    <div class="td">需要 88API 的只读 <b>访问令牌</b> 才能拉取余额和消费数据。</div>
-    <div class="tin">
-      <input id="tokenInput" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" />
-      <button class="teye" id="tokenEye" title="显示/隐藏">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-      </button>
+    <div class="td">填入任意一个站点的凭据，挂件即拉取它的余额和消费数据。</div>
+
+    <div class="tfield">
+      <div class="tlabel"><span>88API 访问令牌</span><span class="tget" data-act="open-88api">获取 →</span></div>
+      <div class="tin">
+        <input id="tokenInput" type="password" placeholder="粘贴 88api 访问令牌（只读）" autocomplete="off" />
+        <button class="teye" data-eye="tokenInput" title="显示/隐藏">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <div class="tfield">
+      <div class="tlabel"><span>APIMart API Key</span><span class="tget" data-act="open-apimart">获取 →</span></div>
+      <div class="tin">
+        <input id="apimartInput" type="password" placeholder="粘贴 APIMart API Key（sk-...，可选）" autocomplete="off" />
+        <button class="teye" data-eye="apimartInput" title="显示/隐藏">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <div class="trow">
       <button class="tbtn" id="tokenSave">保存并开始</button>
-      <button class="tbtn2" id="tokenLink">去 88api.ai 获取令牌</button>
     </div>
     <div class="tmsg" id="tokenMsg"></div>
   </div>
@@ -410,6 +431,11 @@
     }
   });
 
+  // 右键菜单「配置站点凭据」→ 打开配置面板
+  window.widget.onOpenConfig(() => {
+    document.body.setAttribute('data-token', '1');
+  });
+
   // 灵动岛多站点轮播（5 秒切换，带站点标注）
   setInterval(() => {
     if (curMode === 'island' && allSites.length > 1) {
@@ -440,26 +466,30 @@
     b.addEventListener('click', (e) => { e.stopPropagation(); window.widget.act(b.dataset.act); });
   });
 
-  // ---- 令牌配置 ----
+  // ---- 站点凭据配置 ----
   const showTokenMsg = (t, cls) => {
     const m = $('tokenMsg');
     m.textContent = t;
     m.className = 'tmsg' + (cls ? ' ' + cls : '');
   };
   $('tokenSave').addEventListener('click', () => {
-    const v = $('tokenInput').value.trim();
-    if (!v) { showTokenMsg('请先粘贴访问令牌', 'err'); return; }
-    window.widget.act('set-token', v);
+    const accessToken = $('tokenInput').value.trim();
+    const apimartKey = $('apimartInput').value.trim();
+    if (!accessToken && !apimartKey) { showTokenMsg('请至少填入一个站点的凭据', 'err'); return; }
+    window.widget.act('set-config', { accessToken, apimartKey });
     showTokenMsg('已保存，正在拉取数据…', 'ok');
   });
-  $('tokenLink').addEventListener('click', () => window.widget.act('open-token-page'));
-  $('tokenEye').addEventListener('click', () => {
-    const inp = $('tokenInput');
-    inp.type = inp.type === 'password' ? 'text' : 'password';
+  document.querySelectorAll('.teye').forEach((b) => {
+    b.addEventListener('click', () => {
+      const inp = $(b.dataset.eye);
+      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
   });
-  $('tokenInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('tokenSave').click();
+  document.querySelectorAll('.tget[data-act]').forEach((b) => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); window.widget.act(b.dataset.act); });
   });
+  $('tokenInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('tokenSave').click(); });
+  $('apimartInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('tokenSave').click(); });
 
   // ---- 轮播：今日调用模型 / 总计调用模型，每 5 秒切换 ----
   let carIdx = 0;
