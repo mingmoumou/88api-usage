@@ -12,6 +12,7 @@ const STORE = process.env.API88_USAGE_DIR ? path.resolve(process.env.API88_USAGE
 const LOG = path.join(STORE, 'logs.jsonl');
 const STATE_FILE = path.join(HERE, 'window.json');
 const SHOT = process.env.API88_WIDGET_SHOT || '';
+const DEMO = !!process.env.API88_WIDGET_DEMO;
 const TZ = 'Asia/Shanghai';
 
 // 灵动岛尺寸（胶囊 / 悬停展开态）。卡片尺寸用 state.w × state.h（用户可拖角改）。
@@ -69,6 +70,36 @@ async function loadMods() {
     };
   }
   return mods;
+}
+
+// 示例数据（脱敏预览图用）：不拉真实接口，不泄露真实余额/账户/消费
+function demoData() {
+  const settings = {
+    quotaPerUnit: 500000, displayInCurrency: false, symbol: '¥',
+    price: 1, exchangeRate: 1, retentionDays: 7, version: 'demo', systemName: '88API',
+  };
+  const account = { quota: 64250000, usedQuota: 13130000, username: 'demo' };
+  const total = { requests: 198, prompt: 12345678, completion: 234567, cache: 0, quota: 13130000 };
+  const today = { requests: 12, prompt: 480000, completion: 32400, cache: 0, quota: 430000 };
+  const models = [
+    { model: 'gpt-4o-mini', requests: 128, quota: 5600000 },
+    { model: 'claude-3.5-sonnet', requests: 45, quota: 4300000 },
+    { model: 'gemini-1.5-pro', requests: 25, quota: 3200000 },
+  ];
+  const modelsToday = [
+    { model: 'gpt-4o-mini', requests: 6, quota: 180000 },
+    { model: 'claude-3.5-sonnet', requests: 3, quota: 150000 },
+    { model: 'gemini-1.5-pro', requests: 3, quota: 100000 },
+  ];
+  const hourly = [0.1, 0, 0.2, 0, 0.05, 0.3, 0, 0.1, 0.15, 0, 0, 0.25, 0, 0.1, 0.2, 0, 0.05, 0.3, 0.15, 0, 0.1, 0.2, 0.25, 0.43];
+  const daily = [0.5, 0.3, 0.8, 0.2, 0.6, 0.4, 0.43];
+  return {
+    ok: true, settings, account, mode: 'card',
+    updatedAt: new Date().toISOString(),
+    today, total, avgCost: total.requests ? total.quota / total.requests : 0,
+    models, modelsToday, recent: [],
+    hourly, daily, rows: 198, added: 0, pinned: true, pollSec: 15,
+  };
 }
 
 function hourly(rows, st) {
@@ -137,6 +168,12 @@ async function tick() {
   busy = true;
   tickAt = Date.now();
   try {
+    if (DEMO) {
+      lastGood = demoData();
+      if (win && !win.isDestroyed()) win.webContents.send('data', lastGood);
+      if (SHOT) setTimeout(() => capture(), 800);
+      return;
+    }
     const { report } = await loadMods();
     const { all, account, added } = await pull();
     const agg = report.aggregate(all, settings);

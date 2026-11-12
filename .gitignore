@@ -8,9 +8,8 @@ dashboard.html
 widget/window.json
 widget/debug.log
 
-# 自检截图产物与含真实数据的预览图
+# 自检截图产物
 widget/shot_*.png
-widget/preview.png
 
 # 工作区本地数据
 .workbuddy/
