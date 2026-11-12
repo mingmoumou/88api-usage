@@ -4,19 +4,29 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const BASE = (process.env.API88_BASE || 'https://88api.ai').replace(/\/$/, '');
 const TOKEN_FILE = path.join(os.homedir(), '.88api', 'video-studio.json');
+const LOCAL_AUTH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'auth.json');
+
+function readAuthFile(file) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { token: String(cfg.accessToken || cfg.token || '').trim(), userId: String(cfg.userId || '').trim() };
+  } catch { return null; }
+}
 
 export function loadAuth() {
   let token = String(process.env.API88_ACCESS_TOKEN || '').trim();
   let userId = String(process.env.API88_USER_ID || '').trim();
-  if (!token && fs.existsSync(TOKEN_FILE)) {
-    const cfg = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8'));
-    token = String(cfg.accessToken || '').trim();
-    userId = userId || String(cfg.userId || '').trim();
+  // 优先级：环境变量 > 项目根 auth.json（分发用）> ~/.88api/video-studio.json（seedance-studio 插件）
+  for (const file of [LOCAL_AUTH, TOKEN_FILE]) {
+    if (token) break;
+    const c = readAuthFile(file);
+    if (c && c.token) { token = c.token; userId = userId || c.userId; }
   }
-  if (!token) throw new Error('缺少 88API 访问令牌：请设置 API88_ACCESS_TOKEN，或在 ~/.88api/video-studio.json 中配置 accessToken');
+  if (!token) throw new Error('缺少 88API 访问令牌：请设置 API88_ACCESS_TOKEN，或在本项目根目录创建 auth.json（复制 auth.example.json 填入 accessToken / userId）');
   return { token, userId, headers: { Authorization: 'Bearer ' + token, 'New-API-User': userId, 'Content-Type': 'application/json' } };
 }
 

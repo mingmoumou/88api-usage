@@ -18,10 +18,19 @@
 | 计费参数 | `GET /api/status` | `quota_per_unit`（本机 500000：`1 元 = 50 万 quota`）、`quota_display_type`、`usd_exchange_rate` |
 | 可用模型 / 价格 | `GET /api/user/models`、`GET /api/pricing` | 模型清单与官方价目 |
 
-鉴权只需请求头 `Authorization: Bearer <访问令牌>`。令牌在 `~/.88api/video-studio.json`（seedance-studio 插件早前配置的
-只读令牌，权限是「查看」类），它 **不能** 用于付费生成，也不会产生费用。也可以改用环境变量 `API88_ACCESS_TOKEN`。
-
 费用换算：`金额 = quota / 500000`（与站点钱包页一致）。
+
+### 首次配置（绑定你的 88api 账号）
+
+鉴权只要一个只读「访问令牌」（不是 API Key），只能查余额与消费日志，不能付费生成、不产生费用。
+
+1. 登录 [88api.ai](https://88api.ai) → **安全与访问 → 访问令牌** → 点「创建访问令牌」，权限只勾选「查看」类，复制完整令牌。
+2. 把项目根目录的 `auth.example.json` 复制成 `auth.json`，把令牌粘进 `accessToken`：
+   ```json
+   { "accessToken": "你的访问令牌", "userId": "" }
+   ```
+   `userId` 留空即可（程序会通过 `/api/user/self` 自动识别）；也可用环境变量 `API88_ACCESS_TOKEN` 覆盖。
+3. 双击 `打开挂件.bat`，挂件即用你的账号数据运行。`auth.json` 已被 git 忽略，不会被提交到公开仓库。
 
 ## 2. 用法
 

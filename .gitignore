@@ -1,5 +1,6 @@
 # 隐私数据：消费日志与账户信息，绝不公开
 data/
+auth.json
 
 # 自动生成的数据看板（含账户+消费明细）
 dashboard.html
