@@ -150,6 +150,22 @@ async function pull() {
   return { all, account, added: fresh.length };
 }
 
+// 把用户在界面上粘贴的访问令牌写入项目根 auth.json，立即生效
+function setToken(token) {
+  const t = String(token || '').trim();
+  if (!t) return;
+  const file = path.join(ROOT, 'auth.json');
+  try {
+    const cfg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+    cfg.accessToken = t;
+    if (!cfg.userId) cfg.userId = '';
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
+    tick();
+  } catch (e) {
+    log('set-token failed', e);
+  }
+}
+
 let shotDone = false;
 async function capture() {
   if (shotDone || !SHOT || !win || win.isDestroyed()) return;
@@ -169,6 +185,12 @@ async function tick() {
   tickAt = Date.now();
   try {
     if (DEMO) {
+      if (process.env.API88_WIDGET_NEEDTOKEN) {
+        const payload = { ok: false, mode: 'card', error: '缺少 88API 访问令牌：请创建 auth.json 或在界面粘贴令牌', empty: true, needToken: true };
+        if (win && !win.isDestroyed()) win.webContents.send('data', payload);
+        if (SHOT) setTimeout(() => capture(), 800);
+        return;
+      }
       lastGood = demoData();
       if (win && !win.isDestroyed()) win.webContents.send('data', lastGood);
       if (SHOT) setTimeout(() => capture(), 800);
@@ -202,9 +224,11 @@ async function tick() {
     if (win && !win.isDestroyed()) win.webContents.send('data', lastGood);
     if (SHOT) setTimeout(() => capture(), 1200);
   } catch (e) {
+    const msg = String(e && e.message || e);
+    const needToken = msg.includes('缺少 88API 访问令牌');
     const payload = lastGood
-      ? { ...lastGood, ok: false, error: String(e && e.message || e) }
-      : { ok: false, mode, error: String(e && e.message || e), empty: true };
+      ? { ...lastGood, ok: false, error: msg, needToken }
+      : { ok: false, mode, error: msg, empty: true, needToken };
     if (win && !win.isDestroyed()) win.webContents.send('data', payload);
   } finally {
     busy = false;
@@ -422,6 +446,8 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'menu') openMenu();
   else if (name === 'hover') setHover(!!arg);
   else if (name === 'restore') restoreCard();
+  else if (name === 'set-token') setToken(arg);
+  else if (name === 'open-token-page') shell.openExternal('https://88api.ai');
 });
 
 // ---------- 托盘 ----------

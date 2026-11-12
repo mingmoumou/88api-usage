@@ -22,7 +22,7 @@
   body{padding:6px}
 
   /* ============ 卡片视图（card / expanded） ============ */
-  .card{height:100%;display:none;flex-direction:column;gap:11px;
+  .card{position:relative;height:100%;display:none;flex-direction:column;gap:11px;
     padding:15px 17px 14px;border-radius:26px;
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
@@ -86,6 +86,22 @@
   .upd.err{color:var(--red)}
   .empty{color:#55555c;font-size:11px;text-align:center;padding:4px 0}
 
+  /* 令牌配置面板（缺少令牌时覆盖显示） */
+  .token{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;gap:11px;
+    padding:24px;background:var(--bg);border-radius:26px;z-index:5}
+  body[data-token="1"] .token{display:flex}
+  .token .tk{font-size:15px;font-weight:600;color:#fff}
+  .token .td{font-size:11px;color:var(--mut);line-height:1.55}
+  .token input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;padding:10px 12px;color:#fff;font-size:12px;font-family:inherit;outline:none;
+    -webkit-app-region:no-drag}
+  .token input:focus{border-color:rgba(245,196,81,.55)}
+  .token .trow{display:flex;gap:8px;align-items:center}
+  .token .tbtn{background:var(--gold);color:#1a1405;font-weight:600;font-size:12px;
+    padding:9px 16px;border-radius:10px;border:0;cursor:pointer;-webkit-app-region:no-drag}
+  .token .tlink{font-size:11px;color:var(--gold);text-decoration:none;cursor:pointer;
+    -webkit-app-region:no-drag}
+
   /* ============ 灵动岛胶囊视图（island） ============ */
   .island{height:100%;display:none;align-items:center;gap:11px;
     padding:0 20px;border-radius:26px;
@@ -115,6 +131,15 @@
 <body data-mode="card">
 <!-- 完整卡片 -->
 <div class="card" id="card">
+  <div class="token" id="tokenPanel">
+    <div class="tk">配置访问令牌</div>
+    <div class="td">需要 88API 的只读「访问令牌」才能拉取余额和消费数据。</div>
+    <input id="tokenInput" type="password" placeholder="粘贴你的访问令牌" autocomplete="off" />
+    <div class="trow">
+      <button class="tbtn" id="tokenSave">保存并开始</button>
+      <a class="tlink" id="tokenLink">去 88api.ai 获取令牌 →</a>
+    </div>
+  </div>
   <div class="hd">
     <span class="logo"></span>
     <span class="ttl">88API 用量</span>
@@ -216,6 +241,7 @@
       $('cur').textContent = symbol;
       $('iCur').textContent = symbol;
     }
+    document.body.setAttribute('data-token', p && p.needToken ? '1' : '0');
     if (p && p.empty) {
       $('mListToday').innerHTML = `<div class="empty">${esc(p.error || '接口未就绪')}</div>`;
       $('mListTotal').innerHTML = `<div class="empty">${esc(p.error || '接口未就绪')}</div>`;
@@ -309,6 +335,17 @@
   // ---- 按钮 ----
   document.querySelectorAll('button[data-act]').forEach((b) => {
     b.addEventListener('click', (e) => { e.stopPropagation(); window.widget.act(b.dataset.act); });
+  });
+
+  // ---- 令牌配置 ----
+  $('tokenSave').addEventListener('click', () => {
+    const v = $('tokenInput').value.trim();
+    if (!v) return;
+    window.widget.act('set-token', v);
+  });
+  $('tokenLink').addEventListener('click', () => window.widget.act('open-token-page'));
+  $('tokenInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('tokenSave').click();
   });
 
   // ---- 轮播：今日调用模型 / 总计调用模型，每 5 秒切换 ----
