@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>88API 用量</title>
+<style>
+  :root{
+    --bg: rgba(12,12,14,.92);
+    --bg2: rgba(22,22,26,.55);
+    --sep: rgba(255,255,255,.08);
+    --txt: #f5f5f7;
+    --mut: #86868b;
+    --gold: #f5c451;
+    --green: #30d158;
+    --red: #ff453a;
+    --ease: cubic-bezier(0.32,0.72,0,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:transparent;overflow:hidden;
+    font-family:-apple-system,"SF Pro Display","SF Pro Text","Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;user-select:none;cursor:default}
+  body{padding:6px}
+
+  /* ============ 卡片视图（card / expanded） ============ */
+  .card{height:100%;display:none;flex-direction:column;gap:11px;
+    padding:15px 17px 14px;border-radius:26px;
+    background:var(--bg);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    color:var(--txt);overflow:hidden}
+  body[data-mode="card"] .card{-webkit-app-region:drag}
+  .card button{-webkit-app-region:no-drag}
+
+  .hd{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+  .logo{width:8px;height:8px;border-radius:50%;background:var(--gold);
+    box-shadow:0 0 8px rgba(245,196,81,.8);flex:0 0 auto}
+  .ttl{font-size:13px;font-weight:600;letter-spacing:.2px;color:#e8e8ed}
+  .live{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--mut)}
+  .live i{width:5px;height:5px;border-radius:50%;background:var(--green);display:block;
+    animation:pulse 2s ease-in-out infinite}
+  .live.off i{background:var(--red);animation:none}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .sp{flex:1}
+  button{border:0;background:transparent;color:#7d7d84;font-size:13px;line-height:1;
+    width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    transition:background .15s var(--ease),color .15s var(--ease);font-family:inherit;cursor:pointer}
+  button:hover{background:rgba(255,255,255,.08);color:#f5f5f7}
+  button.on{color:var(--gold)}
+
+  .bal{flex:0 0 auto;display:flex;align-items:baseline;gap:9px}
+  .num{display:flex;align-items:baseline;gap:2px}
+  .cur{font-size:15px;color:var(--gold);font-weight:600}
+  .num b{font-size:30px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums;
+    color:#fff;line-height:1}
+  .bal .sub{font-size:10px;color:var(--mut)}
+  .bal .sub b{color:#c7c7cc;font-weight:600;font-variant-numeric:tabular-nums}
+
+  .chart{position:relative;flex:0 0 34px;width:100%}
+  .cap{position:absolute;right:2px;top:0;font-size:9px;color:#6e6e73;letter-spacing:.3px}
+  .spark{width:100%;height:34px;display:block;overflow:visible}
+
+  .stats{flex:0 0 auto;display:grid;grid-template-columns:1.15fr 1fr 1.15fr;gap:6px;
+    padding:8px 0 9px;border-top:1px solid var(--sep);border-bottom:1px solid var(--sep)}
+  .stats>div{display:flex;flex-direction:column;gap:3px}
+  .stats .k{font-size:9.5px;color:var(--mut);letter-spacing:.3px}
+  .stats b{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:#f5f5f7}
+  .stats>div:nth-child(2){text-align:center;align-items:center}
+  .stats>div:nth-child(3){text-align:right;align-items:flex-end}
+
+  /* 模型轮播：今日调用 / 总计调用，5 秒交替 */
+  .models{position:relative;flex:1 1 auto;min-height:0}
+  .m-panel{position:absolute;inset:0;display:flex;flex-direction:column;gap:4px;
+    opacity:0;transform:translateY(8px);transition:opacity .45s var(--ease),transform .45s var(--ease)}
+  .m-panel.on{opacity:1;transform:translateY(0)}
+  .m-hd{font-size:10px;color:var(--mut);letter-spacing:.2px;flex:0 0 auto}
+  .m-list{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;justify-content:center;min-height:0}
+  .mrow{display:grid;grid-template-columns:1fr auto;gap:9px;align-items:center;font-size:11px}
+  .mname{color:#d1d1d6;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+    display:flex;align-items:center;gap:6px}
+  .mname em{font-style:normal;color:#7d7d84;font-size:10px;flex:0 0 auto}
+  .mtrack{height:3px;border-radius:2px;background:rgba(255,255,255,.07);margin-top:3px}
+  .mfill{height:100%;border-radius:2px;background:linear-gradient(90deg,rgba(245,196,81,.5),var(--gold))}
+  .mcost{font-variant-numeric:tabular-nums;color:#e4d3a4;font-weight:600}
+
+  .ft{flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center}
+  .upd{font-size:10px;color:#6e6e73;font-variant-numeric:tabular-nums}
+  .upd.err{color:var(--red)}
+  .empty{color:#55555c;font-size:11px;text-align:center;padding:4px 0}
+
+  /* ============ 灵动岛胶囊视图（island） ============ */
+  .island{height:100%;display:none;align-items:center;gap:11px;
+    padding:0 20px;border-radius:26px;
+    background:var(--bg);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+    color:var(--txt);overflow:hidden;cursor:default}
+  .idot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:0 0 auto;
+    box-shadow:0 0 10px rgba(245,196,81,.85)}
+  .i-bal{display:flex;align-items:baseline;gap:2px;flex:0 0 auto}
+  .i-bal i{font-style:normal;font-size:13px;color:var(--gold);font-weight:600}
+  .i-bal b{font-size:18px;font-weight:700;letter-spacing:-.3px;color:#fff;
+    font-variant-numeric:tabular-nums;line-height:1}
+  .i-sep{width:1px;height:18px;background:var(--sep);flex:0 0 auto}
+  .i-tok{display:flex;align-items:baseline;gap:5px;flex:0 0 auto}
+  .i-tok .k{font-size:10.5px;color:var(--mut)}
+  .i-tok b{font-size:15px;font-weight:650;color:#f5f5f7;font-variant-numeric:tabular-nums}
+  .i-live{width:5px;height:5px;border-radius:50%;background:var(--green);flex:0 0 auto;margin-left:auto;
+    animation:pulse 2s ease-in-out infinite}
+  .i-live.off{background:var(--red);animation:none}
+
+  /* ============ 模式显隐 ============ */
+  body[data-mode="card"] .card,
+  body[data-mode="expanded"] .card{display:flex}
+  body[data-mode="island"] .island{display:flex}
+</style>
+</head>
+<body data-mode="card">
+<!-- 完整卡片 -->
+<div class="card" id="card">
+  <div class="hd">
+    <span class="logo"></span>
+    <span class="ttl">88API 用量</span>
+    <span class="live" id="live"><i></i><span id="liveTxt">实时</span></span>
+    <span class="sp"></span>
+    <button data-act="pin" id="pinBtn" title="窗口置顶">◉</button>
+    <button data-act="refresh" title="立即刷新">↻</button>
+    <button data-act="dashboard" title="打开完整看板">⤢</button>
+    <button data-act="quit" title="退出挂件">✕</button>
+  </div>
+
+  <div class="bal">
+    <div class="num"><span class="cur" id="cur">¥</span><b id="bal">--</b></div>
+    <div class="sub">余额 · 累计 <b id="cum">--</b></div>
+  </div>
+
+  <div class="chart">
+    <svg class="spark" id="spark" viewBox="0 0 340 34" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f5c451" stop-opacity=".36"/>
+          <stop offset="1" stop-color="#f5c451" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path id="area" fill="url(#g)"></path>
+      <path id="line" fill="none" stroke="#f5c451" stroke-width="1.4" stroke-linejoin="round"></path>
+      <circle id="dot" r="2.4" fill="#fff8e6"></circle>
+    </svg>
+    <span class="cap" id="cap">近 24 小时</span>
+  </div>
+
+  <div class="stats">
+    <div><span class="k">今日消费</span><b id="todayCost">--</b></div>
+    <div><span class="k">今日请求</span><b id="todayReq">--</b></div>
+    <div><span class="k">今日 token</span><b id="todayTok">--</b></div>
+  </div>
+
+  <div class="models" id="models">
+    <div class="m-panel on">
+      <div class="m-hd">今日调用</div>
+      <div class="m-list" id="mListToday"></div>
+    </div>
+    <div class="m-panel">
+      <div class="m-hd">总计调用</div>
+      <div class="m-list" id="mListTotal"></div>
+    </div>
+  </div>
+
+  <div class="ft"><span class="upd" id="upd"></span></div>
+</div>
+
+<!-- 灵动岛胶囊 -->
+<div class="island" id="island">
+  <span class="idot"></span>
+  <span class="i-bal"><i id="iCur">¥</i><b id="iBal">--</b></span>
+  <span class="i-sep"></span>
+  <span class="i-tok"><span class="k">token</span><b id="iTok">--</b></span>
+  <span class="i-live" id="iLive"></span>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmtMoney = (v) => (v === 0 ? '0.00' : Math.abs(v) >= 1 ? v.toFixed(2) : v.toFixed(4));
+  const fmtInt = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n));
+  const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  let per = 500000, price = 1, rate = 1, symbol = '¥', pinned = true;
+
+  function drawSpark(vals) {
+    const W = 340, H = 34, n = vals.length, pad = 3;
+    if (!n) return;
+    const max = Math.max(...vals, 0.02);
+    const xs = (i) => pad + (i / (n - 1 || 1)) * (W - pad * 2);
+    const ys = (v) => H - pad - (v / max) * (H - pad * 2);
+    let d = '';
+    vals.forEach((v, i) => { d += (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(v).toFixed(1) + ' '; });
+    $('line').setAttribute('d', d.trim());
+    $('area').setAttribute('d', (d + `L${W - pad} ${H} L${pad} ${H} Z`).trim());
+    const li = n - 1;
+    $('dot').setAttribute('cx', xs(li).toFixed(1));
+    $('dot').setAttribute('cy', ys(vals[li]).toFixed(1));
+    $('dot').setAttribute('opacity', max > 1e-9 && vals[li] > 0 ? 1 : 0.2);
+    return Math.max(...vals);
+  }
+
+  function setCap(text, empty) {
+    $('cap').textContent = text;
+    $('line').setAttribute('stroke-dasharray', empty ? '3 3' : '');
+    $('line').setAttribute('opacity', empty ? 0.5 : 1);
+  }
+
+  function render(p) {
+    if (p && p.settings) {
+      per = p.settings.quotaPerUnit || per;
+      price = p.settings.price || 1;
+      rate = p.settings.exchangeRate || 1;
+      symbol = p.settings.symbol || symbol;
+      $('cur').textContent = symbol;
+      $('iCur').textContent = symbol;
+    }
+    if (p && p.empty) {
+      $('mListToday').innerHTML = `<div class="empty">${esc(p.error || '接口未就绪')}</div>`;
+      $('mListTotal').innerHTML = `<div class="empty">${esc(p.error || '接口未就绪')}</div>`;
+      return;
+    }
+
+    pinned = !!p.pinned;
+    $('pinBtn').classList.toggle('on', pinned);
+
+    const liveOn = !!p.ok;
+    $('live').classList.toggle('off', !liveOn);
+    $('liveTxt').textContent = liveOn ? '实时' : '离线';
+    $('iLive').classList.toggle('off', !liveOn);
+
+    const money = (q) => (q / per) * price * rate;
+
+    if (p.account) $('bal').textContent = fmtMoney(money(p.account.quota));
+    if (p.total) $('cum').textContent = symbol + fmtMoney(money(p.total.quota));
+
+    const t = p.today || { quota: 0, requests: 0, prompt: 0, completion: 0 };
+    const todayTokens = (t.prompt || 0) + (t.completion || 0);
+    $('todayCost').textContent = symbol + fmtMoney(money(t.quota || 0));
+    $('todayReq').textContent = fmtInt(t.requests || 0);
+    $('todayTok').textContent = fmtTok(todayTokens);
+
+    // 灵动岛胶囊：余额 + 今日 token
+    if (p.account) $('iBal').textContent = fmtMoney(money(p.account.quota));
+    $('iTok').textContent = fmtTok(todayTokens);
+
+    const h = p.hourly || [];
+    const d = p.daily || [];
+    const hSum = h.reduce((a, b) => a + b, 0);
+    if (hSum >= 0.005) {
+      drawSpark(h);
+      setCap('近 24 小时', false);
+    } else if (d.some((v) => v > 0)) {
+      drawSpark(d);
+      setCap('近 7 天', false);
+    } else {
+      drawSpark(h.length ? h : [0, 0]);
+      setCap('暂无消费', true);
+    }
+
+    // 模型轮播：今日调用 / 总计调用（模型名 + 次数 + 金额）
+    const renderModelList = (el, list) => {
+      const rows = (list || []).slice(0, 3);
+      if (!rows.length) { el.innerHTML = '<div class="empty">暂无调用</div>'; return; }
+      const top = Math.max(...rows.map((m) => m.quota), 1e-9);
+      el.innerHTML = rows.map((m) => `
+        <div class="mrow">
+          <div>
+            <div class="mname"><span>${esc(m.model)}</span><em>${m.requests} 次</em></div>
+            <div class="mtrack"><div class="mfill" style="width:${Math.max(3, (m.quota / top) * 100).toFixed(1)}%"></div></div>
+          </div>
+          <div class="mcost">${symbol}${fmtMoney(money(m.quota))}</div>
+        </div>`).join('');
+    };
+    renderModelList($('mListToday'), p.modelsToday);
+    renderModelList($('mListTotal'), p.models);
+
+    const u = p.updatedAt ? new Date(p.updatedAt) : new Date();
+    const upd = $('upd');
+    upd.textContent = (p.ok ? '' : '同步失败 · ') + u.toTimeString().slice(0, 8);
+    upd.classList.toggle('err', !p.ok);
+    upd.title = p.ok ? '' : (p.error || '');
+  }
+
+  // ---- 形态切换 ----
+  function setMode(m) { document.body.setAttribute('data-mode', m); }
+  window.widget.onMode(setMode);
+  // 数据里也带 mode，兜底对齐
+  window.widget.onData((p) => { if (p && p.mode) setMode(p.mode); render(p); });
+
+  // ---- 悬停展开 / 移出收回（灵动岛态） ----
+  let hovTimer = null;
+  document.body.addEventListener('mouseenter', () => {
+    clearTimeout(hovTimer);
+    hovTimer = setTimeout(() => window.widget.act('hover', true), 150);
+  });
+  document.body.addEventListener('mouseleave', () => {
+    clearTimeout(hovTimer);
+    window.widget.act('hover', false);
+  });
+
+  // ---- 恢复卡片：双击胶囊 / 展开态双击卡片 ----
+  $('island').addEventListener('dblclick', () => window.widget.act('restore'));
+  $('card').addEventListener('dblclick', () => {
+    if (document.body.getAttribute('data-mode') === 'expanded') window.widget.act('restore');
+  });
+
+  // ---- 按钮 ----
+  document.querySelectorAll('button[data-act]').forEach((b) => {
+    b.addEventListener('click', (e) => { e.stopPropagation(); window.widget.act(b.dataset.act); });
+  });
+
+  // ---- 轮播：今日调用模型 / 总计调用模型，每 5 秒切换 ----
+  let carIdx = 0;
+  setInterval(() => {
+    carIdx = 1 - carIdx;
+    document.querySelectorAll('.m-panel').forEach((el, i) => el.classList.toggle('on', i === carIdx));
+  }, 5000);
+
+  window.widget.onPinned((v) => { pinned = v; $('pinBtn').classList.toggle('on', v); });
+</script>
+</body>
+</html>

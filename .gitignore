@@ -1,0 +1,20 @@
+# 隐私数据：消费日志与账户信息，绝不公开
+data/
+
+# 自动生成的数据看板（含账户+消费明细）
+dashboard.html
+
+# 运行时状态与调试日志
+widget/window.json
+widget/debug.log
+
+# 自检截图产物与含真实数据的预览图
+widget/shot_*.png
+widget/preview.png
+
+# 工作区本地数据
+.workbuddy/
+
+# 系统文件
+.DS_Store
+Thumbs.db
