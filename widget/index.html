@@ -152,6 +152,14 @@
   body[data-mode="card"] .card,
   body[data-mode="expanded"] .card{display:flex}
   body[data-mode="island"] .island{display:flex}
+
+  /* 兜底：窗口已是灵动岛尺寸（又窄又矮）时，无论 data-mode 是什么都只显示胶囊。
+     避免形态切换瞬间（IPC 通知与窗口缩放的时序竞争）卡片被挤在胶囊窗口里。
+     用「且」条件，避免用户把卡片手动拖小时误触发。 */
+  @media (max-width: 340px) and (max-height: 120px) {
+    .card{display:none !important}
+    .island{display:flex !important}
+  }
 </style>
 </head>
 <body data-mode="card">
