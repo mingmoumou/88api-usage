@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title 88API 用量挂件
+title API 用量灵动岛
 rem 直接在本窗口运行，出错时能看到报错；关闭窗口即退出挂件
 cd /d "%~dp0"
 set "ELECTRON=%API88_ELECTRON%"

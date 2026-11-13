@@ -1,4 +1,4 @@
-﻿# 在桌面创建「88API 用量」快捷方式（可重复运行，会覆盖旧的）
+﻿# 在桌面创建「API 用量灵动岛」快捷方式（可重复运行，会覆盖旧的）
 $ErrorActionPreference = 'Stop'
 
 $root   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -15,7 +15,7 @@ if ($env:API88_ELECTRON -and (Test-Path $env:API88_ELECTRON)) {
 $widget = Join-Path $root 'widget'
 $srcIcon = Join-Path $root 'widget\88api.ico'
 $desktop = [Environment]::GetFolderPath('Desktop')
-$lnk    = Join-Path $desktop '88API 用量.lnk'
+$lnk    = Join-Path $desktop 'API 用量灵动岛.lnk'
 
 if (-not (Test-Path $exe))     { throw "找不到 Electron: $exe" }
 if (-not (Test-Path $widget))  { throw "找不到挂件目录: $widget" }
@@ -34,7 +34,7 @@ $sc.TargetPath       = $exe
 $sc.Arguments        = '"' + $widget + '"'
 $sc.WorkingDirectory = $root
 $sc.IconLocation     = $icon + ',0'
-$sc.Description      = '88API 用量桌面挂件：余额、今日消费、模型排行'
+$sc.Description      = 'API 用量灵动岛：余额、今日消费、模型排行'
 $sc.WindowStyle      = 1
 $sc.Save()
 

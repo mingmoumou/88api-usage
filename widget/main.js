@@ -266,8 +266,12 @@ async function tick() {
           ? await tick88api(sync, report)
           : await tickApimart(site);
       } catch (e) {
-        const msg = String(e && e.message || e);
-        const needToken = msg.includes('缺少 88API 访问令牌');
+        const raw = String(e && e.message || e);
+        const needToken = raw.includes('缺少 88API 访问令牌');
+        // APIMart 服务器在境外，境内直连会被墙；失败时给出明确提示，而不是静默显示 --
+        const msg = site.type === 'apimart' && !needToken
+          ? `${raw}（APIMart 服务器在境外，需要开启代理/VPN）`
+          : raw;
         const prev = siteData[site.id];
         siteData[site.id] = prev
           ? { ...prev, ok: false, error: msg }
@@ -518,7 +522,7 @@ function createTray() {
   try {
     const icon = nativeImage.createFromPath(path.join(HERE, 'icon.png')).resize({ width: 16, height: 16 });
     tray = new Tray(icon);
-    tray.setToolTip('88API 用量挂件');
+    tray.setToolTip('API 用量灵动岛');
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示 / 隐藏', click: () => { if (!win) return; win.isVisible() ? win.hide() : win.show(); } },
       { label: '立即刷新', click: () => tick() },

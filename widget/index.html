@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<title>88API 用量</title>
+<title>API 用量灵动岛</title>
 <style>
   :root{
     --bg: rgba(12,12,14,.92);
@@ -200,7 +200,7 @@
   </div>
   <div class="hd">
     <span class="logo"></span>
-    <span class="ttl">88API 用量</span>
+    <span class="ttl">API 用量灵动岛</span>
     <span class="live" id="live"><i></i><span id="liveTxt">实时</span></span>
     <span class="sp"></span>
     <button data-act="pin" id="pinBtn" title="窗口置顶">◉</button>
@@ -371,7 +371,16 @@
   let allSites = [];
   let curIdx = 0;
   let islandIdx = 0;
-  function setMode(m) { curMode = m; document.body.setAttribute('data-mode', m); }
+  function setMode(m) {
+    const wasIsland = curMode === 'island';
+    curMode = m;
+    document.body.setAttribute('data-mode', m);
+    // 刚进入灵动岛时从当前卡片站点开始轮播，之后交给 5 秒定时器独立推进
+    if (m === 'island' && !wasIsland) {
+      islandIdx = curIdx;
+      if (allSites[islandIdx]) renderIsland(allSites[islandIdx]);
+    }
+  }
   window.widget.onMode(setMode);
 
   // 渲染灵动岛（单站点：余额 + token + 站点名）
@@ -379,7 +388,8 @@
     if (!p || p.empty || !p.ok) {
       $('iBal').textContent = '--';
       $('iTok').textContent = '--';
-      $('iSite').textContent = '';
+      const nm = p && p.site === 'apimart' ? 'APIMart' : (p && p.site ? '88API' : '');
+      $('iSite').textContent = nm ? nm + ' · 离线' : '';
       $('iLive').classList.add('off');
       return;
     }
@@ -422,7 +432,8 @@
     if (p && p.sites) {
       allSites = p.sites;
       curIdx = p.current || 0;
-      islandIdx = curIdx;
+      // 注意：不要重置 islandIdx，否则每 15 秒数据刷新都会打断灵动岛 5 秒轮播
+      if (islandIdx >= allSites.length) islandIdx = 0;
       renderCurrent();
       renderDots();
     } else if (p) {

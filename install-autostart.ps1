@@ -25,13 +25,13 @@ New-Item -ItemType Directory -Force -Path $iconDir | Out-Null
 $icon = Join-Path $iconDir 'icon.ico'
 Copy-Item -LiteralPath $srcIcon -Destination $icon -Force
 
-$lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\88API-usage-widget.lnk'
+$lnk = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\API-usage-widget.lnk'
 $sc = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
 $sc.TargetPath       = $exe
 $sc.Arguments        = '"' + $widget + '"'
 $sc.WorkingDirectory = $root
 $sc.IconLocation     = $icon + ',0'
-$sc.Description      = '88API 用量桌面挂件'
+$sc.Description      = 'API 用量灵动岛'
 $sc.Save()
 
 Write-Output "已设置开机自启: $lnk"

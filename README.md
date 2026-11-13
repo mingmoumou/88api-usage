@@ -1,4 +1,4 @@
-# 88API 用量实时记录（可行性验证 + 可运行原型）
+# API 用量灵动岛（88API / APIMart 多站点监控）
 
 **结论：完全可行，而且已经跑通。** 88API 的后台是 new-api 内核（`v1.0.0-rc.46-88api.2`），它把每一次请求都写成一条消费日志，
 用「只读访问令牌」就能把 **模型 / 输入 token / 输出 token / 缓存 token / 金额 / 耗时 / 用的哪个 Key** 逐条拉下来。
@@ -51,6 +51,8 @@ cd widget && npm install
 ```
 APIMart 的 API Key 在 [apimart.ai/keys](https://apimart.ai/keys) 获取（⚠️ 它是能付费调用的 Key，不是只读令牌）。配好两个站点后，卡片底部圆点切换，灵动岛自动轮播。
 
+> ⚠️ **APIMart 需要代理/VPN**：它的服务器在境外（`api.apimart.ai` 解析到 `104.244.43.231`），境内直连会被阻断（实测直连 HTTP 000）。挂件请求走本机网络，请保持代理开启；Clash 的 TUN 模式会自动接管，无需在挂件里额外配置。拉取失败时灵动岛会显示「APIMart · 离线」。
+
 **第 4 步 · 运行**：双击 `打开挂件.bat`。
 
 启动脚本会按「环境变量 `API88_ELECTRON` → 项目内 `node_modules` → 默认路径」顺序查找 electron.exe，找不到会明确提示，不会静默失败。`auth.json` 已被 git 忽略，不会提交到公开仓库。
@@ -99,7 +101,7 @@ node run.mjs serve 8788
 
 ![挂件预览](widget/preview.png)
 
-双击桌面 **「88API 用量」** 图标，或双击 **`打开挂件.bat`** → 桌面出现一张常驻卡片（无边框、半透明、置顶、不进任务栏）。
+双击桌面 **「API 用量灵动岛」** 图标，或双击 **`打开挂件.bat`** → 桌面出现一张常驻卡片（无边框、半透明、置顶、不进任务栏）。
 挂件自己轮询、落盘、聚合，**不需要再跑 `run.mjs serve`**；每轮顺便重写 `dashboard.html`。
 
 卡片显示：余额、累计消费、近 24 小时（当天没量时自动切成近 7 天）迷你曲线、今日消费/请求/token、
@@ -119,7 +121,7 @@ node run.mjs serve 8788
 | `widget/index.html` | 卡片界面（自包含 CSS/JS，含 sparkline） |
 | `widget/package.json` | 让 electron 把该目录当应用入口 |
 | `打开挂件.bat` | 正常启动（无控制台窗口） |
-| `创建桌面快捷方式.bat` | 在桌面建「88API 用量」图标（`create-shortcut.ps1` 干活，可重复运行） |
+| `创建桌面快捷方式.bat` | 在桌面建「API 用量灵动岛」图标（`create-shortcut.ps1` 干活，可重复运行） |
 | `诊断启动.bat` | 在控制台里启动，退出后打印退出码和 `widget/debug.log` 尾部 |
 | `安装开机自启.bat` / `移除开机自启.bat` | 在「启动」文件夹建/删快捷方式 |
 | `widget/88api.ico` / `make-ico.py` | 桌面图标本体（16–256 七种尺寸）与它的生成脚本 |

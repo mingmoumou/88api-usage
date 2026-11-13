@@ -91,7 +91,7 @@ const cost = (q, st, digits = 4) => (st?.symbol || '¥') + money(q, st).toFixed(
 export function printConsole(agg, st, meta = {}) {
   const L = [];
   const line = '─'.repeat(78);
-  L.push('', `  88API 用量看板  ${meta.updatedAt ? '更新于 ' + new Date(meta.updatedAt).toLocaleString('zh-CN', { timeZone: TZ }) : ''}`);
+  L.push('', `  API 用量看板  ${meta.updatedAt ? '更新于 ' + new Date(meta.updatedAt).toLocaleString('zh-CN', { timeZone: TZ }) : ''}`);
   L.push('  ' + line);
   L.push(`  余额 ${cost(meta.account?.quota || 0, st, 2)}   累计消费 ${cost(meta.account?.usedQuota || 0, st, 2)}   （日志累计 ${cost(agg.total.quota, st, 2)}）`);
   L.push(`  今日消费 ${cost(agg.today.quota, st, 4)}   今日请求 ${agg.today.requests} 次   今日 Token 入 ${tok(agg.today.prompt)} / 出 ${tok(agg.today.completion)}`);
