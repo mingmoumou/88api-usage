@@ -19,10 +19,14 @@
   html,body{height:100%;background:transparent;overflow:hidden;
     font-family:-apple-system,"SF Pro Display","SF Pro Text","Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;user-select:none;cursor:default}
-  body{padding:6px}
+  /* --pet = 当前形态下为宠物预留的透明高度。卡片/胶囊的视觉高度 = 100% - --pet，
+     所以开启宠物后它们的实际显示高度与 v1.0.0 完全一致，多出来的高度全在下方。 */
+  body{padding:6px;--pet:0px}
+  body[data-pet="1"][data-mode="card"]{--pet:100px}
+  body[data-pet="1"][data-mode="island"]{--pet:98px}
 
   /* ============ 卡片视图（card / expanded） ============ */
-  .card{position:relative;height:100%;display:none;flex-direction:column;gap:11px;
+  .card{position:relative;height:calc(100% - var(--pet));display:none;flex-direction:column;gap:11px;
     padding:15px 17px 14px;border-radius:26px;
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
@@ -127,7 +131,9 @@
   .tmsg.err{color:var(--red)}
 
   /* ============ 灵动岛胶囊视图（island） ============ */
-  .island{height:100%;display:none;align-items:center;gap:11px;
+  /* 胶囊高度固定 40px（窗口 52 - 上下 6px 留白），不随窗口增高而变化——
+     这样向下扩出宠物区后胶囊外观与 v1.0.0 一致，形态切换时也不会被拉长 */
+  .island{height:40px;flex:0 0 auto;display:none;align-items:center;gap:11px;
     padding:0 20px;border-radius:26px;
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
@@ -148,6 +154,21 @@
     animation:pulse 2s ease-in-out infinite}
   .i-live.off{background:var(--red);animation:none}
 
+  /* ============ 宠物活动区 ============ */
+  /* 贴在卡片/胶囊正下方的透明区，高度 = --pet；宠物在里面左右走动 */
+  .pet-layer{position:absolute;left:6px;right:6px;bottom:6px;height:0;display:none;
+    pointer-events:none;overflow:hidden}
+  body[data-pet="1"][data-mode="card"] .pet-layer{display:block;height:var(--pet)}
+  body[data-pet="1"][data-mode="island"] .pet-layer{display:block;height:var(--pet)}
+  .pet{position:absolute;left:0;bottom:14px;height:72px;will-change:transform;
+    transform:translate3d(0,0,0)}
+  .pet-img{display:block;height:100%;width:auto;transform-origin:50% 100%;
+    -webkit-user-drag:none;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));
+    animation:petBob .46s ease-in-out infinite alternate}
+  .pet-img.idle{animation:none;translate:0 0}
+  @keyframes petBob{from{translate:0 0}to{translate:0 -3px}}
+
   /* ============ 模式显隐 ============ */
   body[data-mode="card"] .card,
   body[data-mode="expanded"] .card{display:flex}
@@ -155,10 +176,12 @@
 
   /* 兜底：窗口已是灵动岛尺寸（又窄又矮）时，无论 data-mode 是什么都只显示胶囊。
      避免形态切换瞬间（IPC 通知与窗口缩放的时序竞争）卡片被挤在胶囊窗口里。
-     用「且」条件，避免用户把卡片手动拖小时误触发。 */
-  @media (max-width: 340px) and (max-height: 120px) {
+     用「且」条件，避免用户把卡片手动拖小时误触发。
+     含宠物区后灵动岛窗口为 300×150，所以高度阈值放到 200。 */
+  @media (max-width: 340px) and (max-height: 200px) {
     .card{display:none !important}
     .island{display:flex !important}
+    body[data-mode="card"] .pet-layer{display:none !important}
   }
 </style>
 </head>
@@ -268,6 +291,13 @@
   <span class="i-tok"><span class="k">token</span><b id="iTok">--</b></span>
   <span class="i-site" id="iSite"></span>
   <span class="i-live" id="iLive"></span>
+</div>
+
+<!-- 宠物活动区（卡片/胶囊下方透明区域，宠物在这里走动） -->
+<div class="pet-layer" id="petLayer">
+  <div class="pet" id="pet">
+    <img class="pet-img" id="petImg" src="pet/nailong.png" alt="" draggable="false" />
+  </div>
 </div>
 
 <script>
@@ -381,8 +411,11 @@
   let islandIdx = 0;
   function setMode(m) {
     const wasIsland = curMode === 'island';
+    if (m === curMode && document.body.getAttribute('data-mode') === m) return;
     curMode = m;
     document.body.setAttribute('data-mode', m);
+    petLast = 0;      // 换形态后重新计时，避免 dt 跳变
+    if (petOn) petStart();
     // 刚进入灵动岛时从当前卡片站点开始轮播，之后交给 5 秒定时器独立推进
     if (m === 'island' && !wasIsland) {
       islandIdx = curIdx;
@@ -464,11 +497,17 @@
   }, 5000);
 
   // ---- 悬停展开 / 移出收回（灵动岛态） ----
+  // 宠物区也在窗口内，所以只在指针位于胶囊上半部分时才展开，避免鼠标路过宠物就弹开
   let hovTimer = null;
-  document.body.addEventListener('mouseenter', () => {
+  const CAPSULE_H = 54;   // 胶囊 40 + 上下留白
+  function hovUpdate(y) {
+    if (curMode === 'expanded') return;                 // 展开态交给 mouseleave 收回
     clearTimeout(hovTimer);
+    if (curMode === 'island' && y > CAPSULE_H) { window.widget.act('hover', false); return; }
     hovTimer = setTimeout(() => window.widget.act('hover', true), 150);
-  });
+  }
+  document.body.addEventListener('mouseenter', (e) => hovUpdate(e.clientY));
+  document.body.addEventListener('mousemove', (e) => hovUpdate(e.clientY));
   document.body.addEventListener('mouseleave', () => {
     clearTimeout(hovTimer);
     window.widget.act('hover', false);
@@ -516,6 +555,78 @@
     carIdx = 1 - carIdx;
     document.querySelectorAll('.m-panel').forEach((el, i) => el.classList.toggle('on', i === carIdx));
   }, 5000);
+
+  // ---- 宠物：在活动区内左右走动（独立于数据刷新，不被 tick 打断） ----
+  const PET_EL = $('pet'), PET_IMG = $('petImg');
+  let petOn = false, petRaf = 0, petLast = 0;
+  let petX = 10, petDir = 1;
+  let petIdleUntil = 0, petNextIdle = 0;
+  const PET_SPEED = 32;   // px/s
+
+  function petVisible() {
+    return petOn && (curMode === 'card' || curMode === 'island');
+  }
+
+  // 活动区边界（CSS 里 pet-layer 左右各内缩 6px，这里再留一点呼吸感）
+  function petArea() {
+    const W = document.documentElement.clientWidth;
+    const layerW = W - 12;
+    const pad = curMode === 'island' ? 6 : 10;
+    const pw = PET_EL.offsetWidth || 38;
+    return { min: pad, max: Math.max(pad, layerW - pad - pw) };
+  }
+
+  function petFrame(ts) {
+    petRaf = 0;
+    if (!petVisible()) return;
+    if (!petLast) petLast = ts;
+    const dt = Math.min(0.05, Math.max(0, (ts - petLast) / 1000));
+    petLast = ts;
+
+    const a = petArea();
+    if (petX < a.min) { petX = a.min; petDir = 1; }
+    if (petX > a.max) { petX = a.max; petDir = -1; }
+
+    if (ts < petIdleUntil) {
+      PET_IMG.classList.add('idle');           // 停下时收起步态浮动
+    } else {
+      PET_IMG.classList.remove('idle');
+      if (!petNextIdle) petNextIdle = ts + 2500 + Math.random() * 3000;
+      if (ts >= petNextIdle) {
+        // 每 4–8 秒随机歇 1–2 秒
+        petIdleUntil = ts + 1000 + Math.random() * 1000;
+        petNextIdle = petIdleUntil + 4000 + Math.random() * 4000;
+      } else {
+        petX += petDir * PET_SPEED * dt;
+        if (petX >= a.max) { petX = a.max; petDir = -1; }
+        else if (petX <= a.min) { petX = a.min; petDir = 1; }
+      }
+    }
+
+    PET_EL.style.transform = 'translate3d(' + petX.toFixed(2) + 'px,0,0)' +
+      (petDir < 0 ? ' scaleX(-1)' : '');
+    petRaf = requestAnimationFrame(petFrame);
+  }
+
+  function petStart() {
+    if (petRaf || !petVisible()) return;
+    petLast = 0;
+    petRaf = requestAnimationFrame(petFrame);
+  }
+
+  // 宠物图缺失时静默关闭（不弹错、不占位）
+  PET_IMG.addEventListener('error', () => {
+    petOn = false;
+    document.body.setAttribute('data-pet', '0');
+  });
+
+  window.widget.onPet((v) => {
+    petOn = !!v;
+    document.body.setAttribute('data-pet', petOn ? '1' : '0');
+    if (petOn) petStart();
+  });
+
+  petStart();
 
   window.widget.onPinned((v) => { pinned = v; $('pinBtn').classList.toggle('on', v); });
 </script>

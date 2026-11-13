@@ -19,6 +19,21 @@ const TZ = 'Asia/Shanghai';
 const ISLAND = { w: 300, h: 52 };
 const EXPANDED = { w: 384, h: 340 };
 
+// 宠物活动区：窗口在卡片/胶囊下方额外扩出的透明高度（不参与卡片布局）。
+// API88_WIDGET_PET=0 可关闭（自检截图、无宠环境用），关闭时窗口高度与 v1.0.0 完全一致。
+const PET = {
+  on: process.env.API88_WIDGET_PET !== '0',
+  card: 100,     // 卡片模式：卡片 340 + 100 = 440
+  island: 98,    // 灵动岛：胶囊 52 + 98 = 150
+};
+// 某形态下窗口需要额外增加的高度；expanded 态宠物隐藏，不加高
+function petH(m) {
+  if (!PET.on) return 0;
+  if (m === 'card') return PET.card;
+  if (m === 'island') return PET.island;
+  return 0;
+}
+
 const DBG = path.join(HERE, 'debug.log');
 function log(...a) {
   try {
@@ -43,6 +58,7 @@ let hover = false;
 let cardPos = null;         // 吸附前卡片的位置（从灵动岛恢复用）
 let animTimer = null;
 let animating = false;
+let petSwitching = false;   // 宠物开关切换中：此期间不要用窗口高度反推卡片高度
 
 // ---- 站点状态（多站点：88api / apimart）----
 let sites = [];             // 启用的站点 [{ id, name, type, apiKey }]
@@ -53,12 +69,20 @@ let state = { x: null, y: null, w: 384, h: 340, poll: 15, pinned: true };
 try { Object.assign(state, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); } catch { /* 首次运行用默认值 */ }
 if (state.h < 340) state.h = 340; // 旧配置高度不足，升级以容纳模型轮播
 
+// 宠物开关：window.json 的 pet 字段（缺省 = 开）；环境变量 API88_WIDGET_PET=0 可强制关闭
+if (typeof state.pet === 'boolean') PET.on = state.pet;
+if (process.env.API88_WIDGET_PET === '0') PET.on = false;
+
 function persist() {
   try {
+    // 动画期间（形态切换）窗口尺寸是中间值，写入会污染启动几何
+    if (animating) return;
     // 只有卡片模式才把位置/尺寸写回（灵动岛/展开态的窗口几何是临时的，不污染启动状态）
     if (mode === 'card' && win && !win.isDestroyed() && !win.isMinimized()) {
       const b = win.getBounds();
-      state.x = b.x; state.y = b.y; state.w = b.width; state.h = b.height;
+      state.x = b.x; state.y = b.y; state.w = b.width;
+      // state.h 只记录卡片内容高度，宠物活动区不算进去（旧配置仍然有效）
+      if (!petSwitching) state.h = Math.max(340, b.height - petH('card'));
     }
     state.pinned = win ? win.isAlwaysOnTop() : state.pinned;
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
@@ -305,7 +329,10 @@ function workArea() {
 
 function islandBounds() {
   const a = workArea();
-  return { x: Math.round(a.x + (a.width - ISLAND.w) / 2), y: Math.round(a.y + 8), width: ISLAND.w, height: ISLAND.h };
+  return {
+    x: Math.round(a.x + (a.width - ISLAND.w) / 2), y: Math.round(a.y + 8),
+    width: ISLAND.w, height: ISLAND.h + petH('island'),
+  };
 }
 function expandedBounds() {
   const a = workArea();
@@ -367,7 +394,8 @@ function maybeSnap() {
 
 function restoreCard() {
   mode = 'card'; hover = false;
-  const w = state.w || 384, h = state.h || 280;
+  const w = state.w || 384;
+  const h = (state.h || 340) + petH('card');   // 窗口高 = 卡片内容 + 宠物区
   const a = workArea();
   let x, y;
   if (cardPos) {
@@ -414,7 +442,7 @@ function defaultPos(w, h) {
 }
 
 function createWindow() {
-  const w = state.w, h = state.h;
+  const w = state.w, h = state.h + petH('card');   // 窗口高含宠物活动区
 
   // 截图自检可指定初始形态（仅 SHOT 模式生效）
   let initMode = 'card';
@@ -427,7 +455,16 @@ function createWindow() {
   let pos, size;
   if (mode === 'island') { const b = islandBounds(); pos = { x: b.x, y: b.y }; size = { w: b.width, h: b.height }; }
   else if (mode === 'expanded') { const b = expandedBounds(); pos = { x: b.x, y: b.y }; size = { w: b.width, h: b.height }; }
-  else { pos = state.x === null ? defaultPos(w, h) : { x: state.x, y: state.y }; size = { w, h }; }
+  else {
+    pos = state.x === null ? defaultPos(w, h) : { x: state.x, y: state.y };
+    // 窗口比上版高 100px（宠物区），旧位置可能贴底 → 收进工作区
+    const a = workArea();
+    pos = {
+      x: Math.round(Math.min(Math.max(pos.x, a.x), a.x + a.width - w)),
+      y: Math.round(Math.min(Math.max(pos.y, a.y), a.y + a.height - h)),
+    };
+    size = { w, h };
+  }
 
   win = new BrowserWindow({
     width: size.w, height: size.h, x: pos.x, y: pos.y,
@@ -446,6 +483,7 @@ function createWindow() {
   // 页面加载完可能还没等到第一轮数据，补推一次已有结果
   win.webContents.on('did-finish-load', () => {
     if (lastGood) win.webContents.send('data', lastGood);
+    win.webContents.send('pet', PET.on);   // 宠物开关（渲染层据此决定是否显示宠物层）
     pushMode();
   });
   win.on('moved', () => { persist(); maybeSnap(); });
@@ -478,6 +516,7 @@ function openMenu() {
       })),
     },
     { label: '立即刷新', click: () => tick() },
+    { label: '显示宠物', type: 'checkbox', checked: PET.on, click: () => togglePet() },
     { label: '配置站点凭据', click: () => { if (win && !win.isDestroyed()) win.webContents.send('open-config'); } },
     { type: 'separator' },
     { label: mode === 'card' ? '收起为灵动岛' : '恢复为卡片', click: () => { if (mode === 'card') snapToIsland(); else restoreCard(); } },
@@ -494,6 +533,25 @@ function togglePin() {
   win.setAlwaysOnTop(next, 'floating');
   persist();
   win.webContents.send('pinned', next);
+}
+
+// 显示/隐藏宠物：同步窗口高度（卡片/胶囊的视觉高度不变）
+function togglePet() {
+  if (!win || win.isDestroyed()) return;
+  const cardH = Math.max(340, state.h || 340);
+  petSwitching = true;
+  PET.on = !PET.on;
+  state.pet = PET.on;
+  state.h = cardH;          // 卡片内容高度与宠物开关无关
+  persist();
+  win.webContents.send('pet', PET.on);
+  if (mode === 'card') {
+    const b = win.getBounds();
+    animateBounds({ x: b.x, y: b.y, width: b.width, height: cardH + petH('card') }, 180);
+  } else if (mode === 'island') {
+    animateBounds(islandBounds(), 180);
+  }
+  setTimeout(() => { petSwitching = false; }, 260);
 }
 
 ipcMain.on('action', (_e, name, arg) => {
