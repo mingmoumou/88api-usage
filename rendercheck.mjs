@@ -63,13 +63,11 @@ const sandbox = {
     getElementById: (id) => el(id),
     querySelectorAll: () => [],
     body: { addEventListener() {}, setAttribute() {}, getAttribute() { return null; } },
-    documentElement: { clientWidth: 384 },
   },
-  window: { widget: { onData: (cb) => { sandbox.__cb = cb; }, onPinned: () => {}, onMode: () => {}, onOpenConfig: () => {}, onPet: () => {}, act: () => {} } },
+  window: { widget: { onData: (cb) => { sandbox.__cb = cb; }, onPinned: () => {}, onMode: () => {}, onOpenConfig: () => {}, act: () => {} } },
   Date, Math,
   setTimeout: () => 0, clearTimeout: () => {},
   setInterval: () => 0, clearInterval: () => {},
-  requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
 };
 sandbox.globalThis = sandbox;
 
