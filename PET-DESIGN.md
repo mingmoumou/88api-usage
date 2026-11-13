@@ -5,9 +5,10 @@
 ## 1. 宠物形象
 
 - 形象：奶龙（3D 动画《奶龙》主角，黄色小恐龙，大肚子、无耳朵、大眼）。
-- 素材需求：透明 PNG，走路 2 帧 + 待机 1 帧，单帧高约 56–72px。
-- ⚠️ **版权**：奶龙是商业 IP（Nailong Lic. by S.I.）。公开仓库分发图片需授权；未授权时仅限本地个人使用，或换免费替代形象（如 infypng.com 的 baby dragon clipart，免费个人/商用）。
-- 素材目录：`widget/pet/`（`nailong-idle.png`、`nailong-walk-1.png`、`nailong-walk-2.png`）。
+- 素材现状：已从用户提供的三视图裁出**正面单帧** → `widget/pet/nailong.png`（75×144，2x 分辨率，透明背景；显示时缩到 72px 高）。
+- 走路动画：单帧无走路序列，v1.1 先用 CSS 上下浮动 + 左右平移模拟步态；后续有走路帧再替换。
+- ⚠️ **版权**：奶龙是商业 IP（Nailong Lic. by S.I.），图片由用户提供。公开仓库分发需授权；如需规避风险，把 `widget/pet/nailong.png` 加入 `.gitignore` 仅本地使用，或换免费替代形象（如 infypng.com 的 baby dragon clipart，免费个人/商用）。
+- 素材目录：`widget/pet/`。
 
 ## 2. 活动范围（核心）
 
