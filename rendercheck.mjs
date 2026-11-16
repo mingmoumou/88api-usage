@@ -64,7 +64,10 @@ const sandbox = {
     querySelectorAll: () => [],
     body: { addEventListener() {}, setAttribute() {}, getAttribute() { return null; } },
   },
-  window: { widget: { onData: (cb) => { sandbox.__cb = cb; }, onPinned: () => {}, onMode: () => {}, onOpenConfig: () => {}, act: () => {} } },
+  window: {
+    addEventListener: () => {},
+    widget: { onData: (cb) => { sandbox.__cb = cb; }, onPinned: () => {}, onMode: () => {}, onOpenConfig: () => {}, act: () => {} },
+  },
   Date, Math,
   setTimeout: () => 0, clearTimeout: () => {},
   setInterval: () => 0, clearInterval: () => {},

@@ -41,6 +41,8 @@ let tickAt = 0;
 let mode = 'card';          // 'card' | 'island' | 'expanded'
 let hover = false;
 let cardPos = null;         // 吸附前卡片的位置（从灵动岛恢复用）
+let islandPos = null;       // 灵动岛位置（可拖到屏幕任意位置，持久化到 window.json）
+let dragging = false;       // 正在拖动灵动岛（渲染层按下鼠标 → 抬起）
 let animTimer = null;
 let animating = false;
 
@@ -52,16 +54,25 @@ let currentSite = 0;        // 当前选中站点索引
 let state = { x: null, y: null, w: 384, h: 340, poll: 15, pinned: true };
 try { Object.assign(state, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); } catch { /* 首次运行用默认值 */ }
 if (state.h < 340) state.h = 340; // 旧配置高度不足，升级以容纳模型轮播
+if (state.island && Number.isFinite(state.island.x) && Number.isFinite(state.island.y)) {
+  islandPos = { x: state.island.x, y: state.island.y };
+}
+
+function writeState() {
+  try { fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2)); } catch { /* 存不下不影响使用 */ }
+}
 
 function persist() {
   try {
-    // 只有卡片模式才把位置/尺寸写回（灵动岛/展开态的窗口几何是临时的，不污染启动状态）
+    // 动画期间（形态切换）窗口尺寸是中间值，写进去会污染下次启动
+    if (animating) return;
+    // 只有卡片模式才把位置/尺寸写回（灵动岛的位置单独存 state.island）
     if (mode === 'card' && win && !win.isDestroyed() && !win.isMinimized()) {
       const b = win.getBounds();
       state.x = b.x; state.y = b.y; state.w = b.width; state.h = b.height;
     }
     state.pinned = win ? win.isAlwaysOnTop() : state.pinned;
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    writeState();
   } catch { /* 位置存不下不影响使用 */ }
 }
 
@@ -303,9 +314,20 @@ function workArea() {
   catch { return { x: 0, y: 0, width: 1920, height: 1040 }; }
 }
 
+// 灵动岛可以待在工作区任意位置（默认顶部居中），只保证整颗胶囊不出屏
+function clampIsland(p) {
+  const a = workArea();
+  return {
+    x: Math.round(Math.min(Math.max(p.x, a.x), a.x + a.width - ISLAND.w)),
+    y: Math.round(Math.min(Math.max(p.y, a.y), a.y + a.height - ISLAND.h)),
+  };
+}
+
 function islandBounds() {
   const a = workArea();
-  return { x: Math.round(a.x + (a.width - ISLAND.w) / 2), y: Math.round(a.y + 8), width: ISLAND.w, height: ISLAND.h };
+  const base = islandPos || { x: a.x + (a.width - ISLAND.w) / 2, y: a.y + 8 };
+  const p = clampIsland(base);
+  return { x: p.x, y: p.y, width: ISLAND.w, height: ISLAND.h };
 }
 function expandedBounds() {
   const a = workArea();
@@ -345,27 +367,29 @@ function animateBounds(to, dur = 240) {
   }, 16);
 }
 
-// 拖动检测：拖到屏幕顶部中间 → 吸附成灵动岛；灵动岛拖离顶部 → 恢复卡片
+// 卡片拖到屏幕上方 → 在当前位置收成灵动岛（横向不再要求居中）
+// 反向不自动发生：灵动岛可以拖到任意位置，只有双击 / 右键菜单才恢复卡片
 function maybeSnap() {
   if (animating || !win || win.isDestroyed()) return;
+  if (mode !== 'card') return;
   const a = workArea();
   const b = win.getBounds();
-  const cx = b.x + b.width / 2;
-  const acx = a.x + a.width / 2;
-  const nearTop = b.y <= a.y + 48;
-  const nearCenter = Math.abs(cx - acx) <= 200;
+  if (b.y <= a.y + 48) enterIsland(b);
+}
 
-  if (mode === 'card' && nearTop && nearCenter) {
-    cardPos = { x: b.x, y: b.y };
-    mode = 'island'; hover = false;
-    pushMode(); setResizableForMode();
-    animateBounds(islandBounds(), 240);
-  } else if ((mode === 'island' || mode === 'expanded') && b.y > a.y + 130) {
-    restoreCard();
-  }
+function enterIsland(from) {
+  const a = workArea();
+  cardPos = { x: from.x, y: from.y };     // 记住卡片位置，恢复时回到这里
+  islandPos = clampIsland({ x: from.x + (from.width - ISLAND.w) / 2, y: a.y + 8 });
+  state.island = islandPos;
+  writeState();
+  mode = 'island'; hover = false;
+  pushMode(); setResizableForMode();
+  animateBounds(islandBounds(), 240);
 }
 
 function restoreCard() {
+  if (!win || win.isDestroyed()) return;
   mode = 'card'; hover = false;
   const w = state.w || 384, h = state.h || 280;
   const a = workArea();
@@ -379,6 +403,8 @@ function restoreCard() {
   }
   x = Math.min(Math.max(x, a.x), a.x + a.width - w);
   y = Math.min(Math.max(y, a.y), a.y + a.height - h);
+  // 卡片原来就在「吸附区」里的话，恢复后随便一拖又会变回胶囊 → 往下推一点点
+  if (a.height >= h + 64) y = Math.max(y, a.y + 64);
   cardPos = { x, y };
   pushMode(); setResizableForMode();
   animateBounds({ x, y, width: w, height: h }, 240);
@@ -400,11 +426,7 @@ function setHover(v) {
 
 function snapToIsland() {
   if (mode !== 'card' || !win || win.isDestroyed()) return;
-  const b = win.getBounds();
-  cardPos = { x: b.x, y: b.y };
-  mode = 'island'; hover = false;
-  pushMode(); setResizableForMode();
-  animateBounds(islandBounds(), 240);
+  enterIsland(win.getBounds());
 }
 
 // ---------- 窗口 ----------
@@ -442,13 +464,14 @@ function createWindow() {
   });
   win.setAlwaysOnTop(state.pinned, 'floating');
   win.loadFile(path.join(HERE, 'index.html'));
-  win.once('ready-to-show', () => { win.show(); });
+  win.once('ready-to-show', () => { win.show(); log('shown', { mode, bounds: win.getBounds(), area: workArea() }); });
   // 页面加载完可能还没等到第一轮数据，补推一次已有结果
   win.webContents.on('did-finish-load', () => {
     if (lastGood) win.webContents.send('data', lastGood);
     pushMode();
   });
-  win.on('moved', () => { persist(); maybeSnap(); });
+  // 卡片拖动时落盘并检测吸附；灵动岛拖动由 drag-end 单独存档，避免每次移动都写文件
+  win.on('moved', () => { if (mode === 'card') persist(); maybeSnap(); });
   win.on('resized', persist);
   win.on('closed', () => { win = null; });
   win.on('blur', persist);
@@ -504,6 +527,26 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'menu') openMenu();
   else if (name === 'hover') setHover(!!arg);
   else if (name === 'restore') restoreCard();
+  // 灵动岛拖动：用渲染层的 screenX/screenY 增量来挪窗口。
+  // 不用 -webkit-app-region:drag，是因为它会把 hover / 双击事件吞掉，胶囊就没法双击展开了。
+  else if (name === 'drag-start') { dragging = mode === 'island'; }
+  else if (name === 'move-by') {
+    if (dragging && mode === 'island' && win && !win.isDestroyed() && arg) {
+      const b = win.getBounds();
+      const p = clampIsland({ x: b.x + (Number(arg.dx) || 0), y: b.y + (Number(arg.dy) || 0) });
+      win.setPosition(p.x, p.y);
+    }
+  }
+  else if (name === 'drag-end') {
+    if (dragging && mode === 'island' && win && !win.isDestroyed()) {
+      const b = win.getBounds();
+      islandPos = { x: b.x, y: b.y };
+      state.island = islandPos;
+      writeState();
+      log('island-moved', islandPos);   // 拖动落点记一笔，出问题好查
+    }
+    dragging = false;
+  }
   else if (name === 'set-config') setConfig(arg);
   else if (name === 'open-88api') shell.openExternal('https://88api.ai');
   else if (name === 'open-apimart') shell.openExternal('https://apimart.ai/keys');

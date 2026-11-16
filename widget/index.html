@@ -132,6 +132,9 @@
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
     color:var(--txt);overflow:hidden;cursor:default}
+  /* 灵动岛可拖动：给个抓手光标，拖的时候变抓紧 */
+  body[data-mode="island"] .island{cursor:grab}
+  body.dragging .island{cursor:grabbing}
   .idot{width:9px;height:9px;border-radius:50%;background:var(--gold);flex:0 0 auto;
     box-shadow:0 0 10px rgba(245,196,81,.85)}
   .i-bal{display:flex;align-items:baseline;gap:2px;flex:0 0 auto}
@@ -463,16 +466,37 @@
     }
   }, 5000);
 
-  // ---- 悬停展开 / 移出收回（灵动岛态） ----
-  let hovTimer = null;
-  document.body.addEventListener('mouseenter', () => {
-    clearTimeout(hovTimer);
-    hovTimer = setTimeout(() => window.widget.act('hover', true), 150);
+  // ---- 灵动岛拖动 ----
+  // 不用 -webkit-app-region:drag：那会让胶囊收不到鼠标事件，双击恢复卡片就失效了。
+  // 这里用 screenX/screenY（屏幕坐标，窗口跟着动也不会变）算增量，交给主进程挪窗口。
+  let dragOn = false, dragPt = null;
+  const islandEl = $('island');
+
+  islandEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    dragOn = true;
+    dragPt = { x: e.screenX, y: e.screenY };
+    document.body.classList.add('dragging');
+    window.widget.act('drag-start');
+    e.preventDefault();
   });
-  document.body.addEventListener('mouseleave', () => {
-    clearTimeout(hovTimer);
-    window.widget.act('hover', false);
+  window.addEventListener('mousemove', (e) => {
+    if (!dragOn) return;
+    const dx = e.screenX - dragPt.x;
+    const dy = e.screenY - dragPt.y;
+    if (!dx && !dy) return;
+    dragPt = { x: e.screenX, y: e.screenY };
+    window.widget.act('move-by', { dx, dy });
   });
+  function endDrag() {
+    if (!dragOn) return;
+    dragOn = false;
+    dragPt = null;
+    document.body.classList.remove('dragging');
+    window.widget.act('drag-end');
+  }
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('blur', endDrag);
 
   // ---- 恢复卡片：双击胶囊 / 展开态双击卡片 ----
   $('island').addEventListener('dblclick', () => window.widget.act('restore'));
