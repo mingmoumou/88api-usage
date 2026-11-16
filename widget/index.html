@@ -161,19 +161,32 @@
   body[data-mode="side-r"] .island{display:flex}
 
   /* ============ 侧边竖条（贴左/右边缘） ============ */
-  /* 把横向胶囊整体旋转 90°：窗口 52×300 里正好装下 300×52 的胶囊，
-     余额/token/站点/轮播的渲染逻辑一行都不用改。 */
-  body[data-mode="side-l"],
-  body[data-mode="side-r"]{overflow:visible}
-  body[data-mode="side-l"] .island,
-  body[data-mode="side-r"] .island{
-    position:absolute; left:50%; top:50%;
-    width:300px; height:52px;
+  /* 真·竖排：胶囊改成纵向 flex，文字用 writing-mode 直立排列。
+     不整条旋转——旋转会让数字躺倒，得歪头看。 */
+  body[data-mode^="side"]{padding:0; overflow:visible}
+  body[data-mode^="side"] .island{
+    flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; width:100%; height:100%; padding:10px 4px;
   }
-  body[data-mode="side-l"] .island{transform:translate(-50%,-50%) rotate(-90deg)}
-  body[data-mode="side-r"] .island{transform:translate(-50%,-50%) rotate(90deg)}
-  body[data-mode="side-l"] .island,
-  body[data-mode="side-r"] .island{cursor:grab}
+  body[data-mode^="side"] .island .i-bal{flex-direction:column; align-items:center; gap:0}
+  body[data-mode^="side"] .island .i-tok{flex-direction:column; align-items:center; gap:1px}
+  body[data-mode^="side"] .island .i-sep{width:20px; height:1px}
+  body[data-mode^="side"] .island .i-live{margin-left:0}
+  /* 直立字形：每个字保持正立，从上往下排（token / 88API 也一样） */
+  body[data-mode^="side"] .island .i-bal i,
+  body[data-mode^="side"] .island .i-bal b,
+  body[data-mode^="side"] .island .i-tok .k,
+  body[data-mode^="side"] .island .i-tok b,
+  body[data-mode^="side"] .island .i-site{
+    writing-mode:vertical-rl; text-orientation:upright;
+  }
+  /* 竖排后字号要收一点，否则装不下（竖排每个字占 1em 高度，比横排费空间） */
+  body[data-mode^="side"] .island .i-bal i{font-size:12px}
+  body[data-mode^="side"] .island .i-bal b{font-size:16px; letter-spacing:0}
+  body[data-mode^="side"] .island .i-tok .k{font-size:8px}
+  body[data-mode^="side"] .island .i-tok b{font-size:11px}
+  body[data-mode^="side"] .island .i-site{font-size:8px; padding:5px 2px; border-radius:7px}
+  body[data-mode^="side"] .island{cursor:grab}
 
   /* 兜底：窗口已是灵动岛尺寸（又窄又矮）时，无论 data-mode 是什么都只显示胶囊。
      避免形态切换瞬间（IPC 通知与窗口缩放的时序竞争）卡片被挤在胶囊窗口里。
