@@ -18,9 +18,8 @@ const TZ = 'Asia/Shanghai';
 // 灵动岛尺寸（胶囊 / 悬停展开态）。卡片尺寸用 state.w × state.h（用户可拖角改）。
 const ISLAND = { w: 300, h: 52 };
 const EXPANDED = { w: 384, h: 340 };
-// 侧边竖条：竖排文字（数字直立、从上往下读），56 宽 × 430 高，贴住左右屏幕边缘
-// 高度按内容实测：竖排内容约 419px（含 gap 与内边距），留 11px 余量防字体渲染差异
-const SIDE = { w: 56, h: 430 };
+// 侧边竖条：横向胶囊整体旋转 90° → 52 宽 × 300 高，贴住左右屏幕边缘
+const SIDE = { w: 52, h: 300 };
 const SIDE_EDGE = 40;      // 距屏幕边缘多少像素内松手 → 吸成竖条
 
 const DBG = path.join(HERE, 'debug.log');
