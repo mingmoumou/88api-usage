@@ -18,6 +18,9 @@ const TZ = 'Asia/Shanghai';
 // 灵动岛尺寸（胶囊 / 悬停展开态）。卡片尺寸用 state.w × state.h（用户可拖角改）。
 const ISLAND = { w: 300, h: 52 };
 const EXPANDED = { w: 384, h: 340 };
+// 侧边竖条：横向胶囊整体旋转 90° → 52 宽 × 300 高，贴住左右屏幕边缘
+const SIDE = { w: 52, h: 300 };
+const SIDE_EDGE = 40;      // 距屏幕边缘多少像素内松手 → 吸成竖条
 
 const DBG = path.join(HERE, 'debug.log');
 function log(...a) {
@@ -315,19 +318,32 @@ function workArea() {
 }
 
 // 灵动岛可以待在工作区任意位置（默认顶部居中），只保证整颗胶囊不出屏
-function clampIsland(p) {
+function clampBox(p, w, h) {
   const a = workArea();
   return {
-    x: Math.round(Math.min(Math.max(p.x, a.x), a.x + a.width - ISLAND.w)),
-    y: Math.round(Math.min(Math.max(p.y, a.y), a.y + a.height - ISLAND.h)),
+    x: Math.round(Math.min(Math.max(p.x, a.x), a.x + a.width - w)),
+    y: Math.round(Math.min(Math.max(p.y, a.y), a.y + a.height - h)),
   };
 }
+function clampIsland(p) { return clampBox(p, ISLAND.w, ISLAND.h); }
+function isSide(m) { return m === 'side-l' || m === 'side-r'; }
 
 function islandBounds() {
   const a = workArea();
   const base = islandPos || { x: a.x + (a.width - ISLAND.w) / 2, y: a.y + 8 };
   const p = clampIsland(base);
   return { x: p.x, y: p.y, width: ISLAND.w, height: ISLAND.h };
+}
+// 竖条贴边：x 固定贴住边缘，纵向位置沿用松手时的位置（没给就居中）
+function sideBounds(edge, y) {
+  const a = workArea();
+  const yy = Number.isFinite(y)
+    ? Math.round(Math.min(Math.max(y, a.y), a.y + a.height - SIDE.h))
+    : Math.round(a.y + (a.height - SIDE.h) / 2);
+  return {
+    x: edge === 'left' ? a.x : Math.round(a.x + a.width - SIDE.w),
+    y: yy, width: SIDE.w, height: SIDE.h,
+  };
 }
 function expandedBounds() {
   const a = workArea();
@@ -377,15 +393,26 @@ function maybeSnap() {
   if (b.y <= a.y + 48) enterIsland(b);
 }
 
-function enterIsland(from) {
+function enterIsland(from, keepY = false) {
   const a = workArea();
-  cardPos = { x: from.x, y: from.y };     // 记住卡片位置，恢复时回到这里
-  islandPos = clampIsland({ x: from.x + (from.width - ISLAND.w) / 2, y: a.y + 8 });
+  if (mode === 'card') cardPos = { x: from.x, y: from.y };  // 记住卡片位置，恢复时回到这里
+  const cy = keepY ? from.y + from.height / 2 - ISLAND.h / 2 : a.y + 8;
+  islandPos = clampIsland({ x: from.x + (from.width - ISLAND.w) / 2, y: cy });
   state.island = islandPos;
   writeState();
   mode = 'island'; hover = false;
   pushMode(); setResizableForMode();
   animateBounds(islandBounds(), 240);
+}
+
+// 吸成左右竖条（纵向沿用松手位置）
+function enterSide(edge, y) {
+  if (!win || win.isDestroyed()) return;
+  if (mode === 'card') cardPos = win.getBounds();
+  mode = edge === 'left' ? 'side-l' : 'side-r';
+  pushMode(); setResizableForMode();
+  animateBounds(sideBounds(edge, y), 240);
+  log('side-snap', { edge, y: y ?? null, to: sideBounds(edge, y) });
 }
 
 function restoreCard() {
@@ -442,12 +469,13 @@ function createWindow() {
   let initMode = 'card';
   if (SHOT) {
     const m = process.env.API88_WIDGET_MODE;
-    if (m === 'island' || m === 'expanded') initMode = m;
+    if (m === 'island' || m === 'expanded' || m === 'side-l' || m === 'side-r') initMode = m;
   }
   mode = initMode;
 
   let pos, size;
   if (mode === 'island') { const b = islandBounds(); pos = { x: b.x, y: b.y }; size = { w: b.width, h: b.height }; }
+  else if (isSide(mode)) { const b = sideBounds(mode === 'side-l' ? 'left' : 'right'); pos = { x: b.x, y: b.y }; size = { w: b.width, h: b.height }; }
   else if (mode === 'expanded') { const b = expandedBounds(); pos = { x: b.x, y: b.y }; size = { w: b.width, h: b.height }; }
   else { pos = state.x === null ? defaultPos(w, h) : { x: state.x, y: state.y }; size = { w, h }; }
 
@@ -527,23 +555,35 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'menu') openMenu();
   else if (name === 'hover') setHover(!!arg);
   else if (name === 'restore') restoreCard();
+  else if (name === 'to-island') snapToIsland();
   // 灵动岛拖动：用渲染层的 screenX/screenY 增量来挪窗口。
   // 不用 -webkit-app-region:drag，是因为它会把 hover / 双击事件吞掉，胶囊就没法双击展开了。
-  else if (name === 'drag-start') { dragging = mode === 'island'; }
+  else if (name === 'drag-start') { dragging = mode === 'island' || isSide(mode); }
   else if (name === 'move-by') {
-    if (dragging && mode === 'island' && win && !win.isDestroyed() && arg) {
+    if (dragging && (mode === 'island' || isSide(mode)) && win && !win.isDestroyed() && arg) {
       const b = win.getBounds();
-      const p = clampIsland({ x: b.x + (Number(arg.dx) || 0), y: b.y + (Number(arg.dy) || 0) });
+      // 按当前窗口尺寸夹取，横向胶囊和竖条都能拖
+      const p = clampBox({ x: b.x + (Number(arg.dx) || 0), y: b.y + (Number(arg.dy) || 0) }, b.width, b.height);
       win.setPosition(p.x, p.y);
     }
   }
   else if (name === 'drag-end') {
-    if (dragging && mode === 'island' && win && !win.isDestroyed()) {
+    if (dragging && win && !win.isDestroyed()) {
       const b = win.getBounds();
-      islandPos = { x: b.x, y: b.y };
-      state.island = islandPos;
-      writeState();
-      log('island-moved', islandPos);   // 拖动落点记一笔，出问题好查
+      const a = workArea();
+      const nearLeft = b.x <= a.x + SIDE_EDGE;
+      const nearRight = b.x + b.width >= a.x + a.width - SIDE_EDGE;
+      if (nearLeft || nearRight) {
+        // 松手时贴着左右边缘 → 转成竖条贴边，纵向以松手点为中心
+        enterSide(nearLeft ? 'left' : 'right', b.y + b.height / 2 - SIDE.h / 2);
+      } else if (isSide(mode)) {
+        enterIsland(b, true);           // 竖条被拖离边缘 → 变回横向胶囊
+      } else if (mode === 'island') {
+        islandPos = { x: b.x, y: b.y };
+        state.island = islandPos;
+        writeState();
+        log('island-moved', islandPos);   // 拖动落点记一笔，出问题好查
+      }
     }
     dragging = false;
   }

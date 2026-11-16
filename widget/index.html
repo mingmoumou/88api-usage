@@ -127,7 +127,9 @@
   .tmsg.err{color:var(--red)}
 
   /* ============ 灵动岛胶囊视图（island） ============ */
-  .island{height:100%;display:none;align-items:center;gap:11px;
+  /* 胶囊高度固定 40px（窗口 52 - 上下各 6px 留白）：
+     形态切换动画中途窗口还没到位时，不会被拉成一条竖长条 */
+  .island{height:40px;display:none;align-items:center;gap:11px;
     padding:0 20px;border-radius:26px;
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
@@ -154,7 +156,24 @@
   /* ============ 模式显隐 ============ */
   body[data-mode="card"] .card,
   body[data-mode="expanded"] .card{display:flex}
-  body[data-mode="island"] .island{display:flex}
+  body[data-mode="island"] .island,
+  body[data-mode="side-l"] .island,
+  body[data-mode="side-r"] .island{display:flex}
+
+  /* ============ 侧边竖条（贴左/右边缘） ============ */
+  /* 把横向胶囊整体旋转 90°：窗口 52×300 里正好装下 300×52 的胶囊，
+     余额/token/站点/轮播的渲染逻辑一行都不用改。 */
+  body[data-mode="side-l"],
+  body[data-mode="side-r"]{overflow:visible}
+  body[data-mode="side-l"] .island,
+  body[data-mode="side-r"] .island{
+    position:absolute; left:50%; top:50%;
+    width:300px; height:52px;
+  }
+  body[data-mode="side-l"] .island{transform:translate(-50%,-50%) rotate(-90deg)}
+  body[data-mode="side-r"] .island{transform:translate(-50%,-50%) rotate(90deg)}
+  body[data-mode="side-l"] .island,
+  body[data-mode="side-r"] .island{cursor:grab}
 
   /* 兜底：窗口已是灵动岛尺寸（又窄又矮）时，无论 data-mode 是什么都只显示胶囊。
      避免形态切换瞬间（IPC 通知与窗口缩放的时序竞争）卡片被挤在胶囊窗口里。
@@ -383,15 +402,17 @@
   let curIdx = 0;
   let islandIdx = 0;
   function setMode(m) {
-    const wasIsland = curMode === 'island';
+    const wasIsland = isIslandLike(curMode);
     curMode = m;
     document.body.setAttribute('data-mode', m);
-    // 刚进入灵动岛时从当前卡片站点开始轮播，之后交给 5 秒定时器独立推进
-    if (m === 'island' && !wasIsland) {
+    // 刚进入灵动岛/侧边竖条时从当前卡片站点开始轮播，之后交给 5 秒定时器独立推进
+    if (isIslandLike(m) && !wasIsland) {
       islandIdx = curIdx;
       if (allSites[islandIdx]) renderIsland(allSites[islandIdx]);
     }
   }
+  // 横胶囊和左右竖条都算「胶囊态」，共用渲染与轮播逻辑
+  function isIslandLike(m) { return m === 'island' || m === 'side-l' || m === 'side-r'; }
   window.widget.onMode(setMode);
 
   // 渲染灵动岛（单站点：余额 + token + 站点名）
@@ -460,7 +481,7 @@
 
   // 灵动岛多站点轮播（5 秒切换，带站点标注）
   setInterval(() => {
-    if (curMode === 'island' && allSites.length > 1) {
+    if (isIslandLike(curMode) && allSites.length > 1) {
       islandIdx = (islandIdx + 1) % allSites.length;
       renderIsland(allSites[islandIdx]);
     }
