@@ -27,12 +27,11 @@
     background:var(--bg);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
     color:var(--txt);overflow:hidden}
-  /* 只有标题栏可拖动窗口。
-     整张卡片设成 drag 的话，它在系统眼里就是「标题栏」——右键会弹 Windows 系统菜单
-     （还原/移动/大小/关闭），自定义菜单根本收不到事件。 */
+  /* 标题栏不再用 -webkit-app-region:drag：那块在系统眼里是窗口标题栏，
+     右键弹系统菜单、双击也不进页面。改成渲染层手动拖动（见文末脚本），
+     这样双击标题栏可以收回灵动岛。 */
   .hd{display:flex;align-items:center;gap:7px;flex:0 0 auto;
-    padding-top:8px;margin-top:-8px}   /* 往上撑 8px 加大拖拽命中区，不影响布局 */
-  body[data-mode="card"] .hd{-webkit-app-region:drag}
+    padding-top:8px;margin-top:-8px;cursor:default}
   .card button{-webkit-app-region:no-drag}
   .logo{width:8px;height:8px;border-radius:50%;background:var(--gold);
     box-shadow:0 0 8px rgba(245,196,81,.8);flex:0 0 auto}
@@ -527,6 +526,45 @@
   $('island').addEventListener('dblclick', () => window.widget.act('restore'));
   $('card').addEventListener('dblclick', () => {
     if (document.body.getAttribute('data-mode') === 'expanded') window.widget.act('restore');
+  });
+
+  // ---- 卡片标题栏：手动拖动 + 双击收回灵动岛 ----
+  // 标题栏不能再设 app-region:drag（那样收不到双击），所以在这里自己挪窗口
+  const hdEl = document.querySelector('.hd');
+  let hdOn = false, hdMoved = false, hdPt = null;
+
+  hdEl.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || curMode !== 'card') return;
+    if (e.target.closest('button')) return;      // 标题栏按钮不参与拖动
+    hdOn = true; hdMoved = false;
+    hdPt = { x: e.screenX, y: e.screenY };
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!hdOn) return;
+    const dx = e.screenX - hdPt.x;
+    const dy = e.screenY - hdPt.y;
+    if (!hdMoved) {
+      if (Math.abs(dx) + Math.abs(dy) < 3) return;   // 3px 阈值：区分「点击/双击」和「拖动」
+      hdMoved = true;
+      window.widget.act('drag-start');
+    }
+    if (!dx && !dy) return;
+    hdPt = { x: e.screenX, y: e.screenY };
+    window.widget.act('move-by', { dx, dy });
+  });
+  function endHd() {
+    if (!hdOn) return;
+    hdOn = false;
+    if (hdMoved) window.widget.act('drag-end');
+    hdMoved = false; hdPt = null;
+  }
+  window.addEventListener('mouseup', endHd);
+  window.addEventListener('blur', endHd);
+
+  // 双击标题栏 → 收回灵动岛（双击按钮不触发）
+  hdEl.addEventListener('dblclick', (e) => {
+    if (e.target.closest('button')) return;
+    if (curMode === 'card') window.widget.act('to-island');
   });
 
   // ---- 按钮 ----

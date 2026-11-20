@@ -62,6 +62,7 @@ const sandbox = {
   document: {
     getElementById: (id) => el(id),
     querySelectorAll: () => [],
+    querySelector: (sel) => el('sel' + sel),
     body: { addEventListener() {}, setAttribute() {}, getAttribute() { return null; } },
   },
   window: {

@@ -530,8 +530,9 @@ function createWindow() {
     if (lastGood) win.webContents.send('data', lastGood);
     pushMode();
   });
-  // 卡片拖动时落盘并检测吸附；灵动岛拖动由 drag-end 单独存档，避免每次移动都写文件
-  win.on('moved', () => { if (mode === 'card') persist(); maybeSnap(); });
+  // 卡片拖动时落盘并检测吸附（手动拖动时每帧都会 moved，拖动中不写文件）；
+  // 灵动岛/竖条的位置由 drag-end 单独存档
+  win.on('moved', () => { if (mode === 'card' && !dragging) persist(); maybeSnap(); });
   win.on('resized', persist);
   win.on('closed', () => { win = null; });
   win.on('blur', persist);
@@ -608,31 +609,36 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'toggle-site') toggleSite(String(arg || ''));
   // 灵动岛拖动：用渲染层的 screenX/screenY 增量来挪窗口。
   // 不用 -webkit-app-region:drag，是因为它会把 hover / 双击事件吞掉，胶囊就没法双击展开了。
-  else if (name === 'drag-start') { dragging = mode === 'island' || isSide(mode); }
+  else if (name === 'drag-start') { dragging = mode === 'card' || mode === 'island' || isSide(mode); }
   else if (name === 'move-by') {
-    if (dragging && (mode === 'island' || isSide(mode)) && win && !win.isDestroyed() && arg) {
+    // 动画途中（吸附/展开）不跟随，避免和补间打架
+    if (dragging && !animating && win && !win.isDestroyed() && arg) {
       const b = win.getBounds();
-      // 按当前窗口尺寸夹取，横向胶囊和竖条都能拖
+      // 按当前窗口尺寸夹取，卡片 / 横向胶囊 / 竖条都能拖
       const p = clampBox({ x: b.x + (Number(arg.dx) || 0), y: b.y + (Number(arg.dy) || 0) }, b.width, b.height);
-      win.setPosition(p.x, p.y);
+      if (p.x !== b.x || p.y !== b.y) win.setPosition(p.x, p.y);
     }
   }
   else if (name === 'drag-end') {
     if (dragging && win && !win.isDestroyed()) {
-      const b = win.getBounds();
-      const a = workArea();
-      const nearLeft = b.x <= a.x + SIDE_EDGE;
-      const nearRight = b.x + b.width >= a.x + a.width - SIDE_EDGE;
-      if (nearLeft || nearRight) {
-        // 松手时贴着左右边缘 → 转成竖条贴边，纵向以松手点为中心
-        enterSide(nearLeft ? 'left' : 'right', b.y + b.height / 2 - SIDE.h / 2);
-      } else if (isSide(mode)) {
-        enterIsland(b, true);           // 竖条被拖离边缘 → 变回横向胶囊
-      } else if (mode === 'island') {
-        islandPos = { x: b.x, y: b.y };
-        state.island = islandPos;
-        writeState();
-        log('island-moved', islandPos);   // 拖动落点记一笔，出问题好查
+      if (mode === 'card') {
+        persist();                      // 卡片拖动结束才落盘（拖动中不写文件）
+      } else {
+        const b = win.getBounds();
+        const a = workArea();
+        const nearLeft = b.x <= a.x + SIDE_EDGE;
+        const nearRight = b.x + b.width >= a.x + a.width - SIDE_EDGE;
+        if (nearLeft || nearRight) {
+          // 松手时贴着左右边缘 → 转成竖条贴边，纵向以松手点为中心
+          enterSide(nearLeft ? 'left' : 'right', b.y + b.height / 2 - SIDE.h / 2);
+        } else if (isSide(mode)) {
+          enterIsland(b, true);         // 竖条被拖离边缘 → 变回横向胶囊
+        } else if (mode === 'island') {
+          islandPos = { x: b.x, y: b.y };
+          state.island = islandPos;
+          writeState();
+          log('island-moved', islandPos);   // 拖动落点记一笔，出问题好查
+        }
       }
     }
     dragging = false;
