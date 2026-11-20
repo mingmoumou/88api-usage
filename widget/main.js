@@ -550,6 +550,7 @@ function createWindow() {
 }
 
 function openMenu() {
+  log('menu', { mode });   // 记录菜单被打开（排查「右键没反应」用）
   Menu.buildFromTemplate([
     { label: win && win.isAlwaysOnTop() ? '取消置顶' : '窗口置顶', click: () => togglePin() },
     { type: 'separator' },
