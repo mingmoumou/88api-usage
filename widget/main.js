@@ -44,7 +44,7 @@ let tickAt = 0;
 // ---- 形态状态 ----
 let mode = 'card';          // 'card' | 'island' | 'expanded'
 let hover = false;
-let cardPos = null;         // 吸附前卡片的位置（从灵动岛恢复用）
+let cardLastY = null;       // 卡片上一次的 y，用于判断是否「从下方拖进吸附区」
 let islandPos = null;       // 灵动岛位置（可拖到屏幕任意位置，持久化到 window.json）
 let dragging = false;       // 正在拖动灵动岛（渲染层按下鼠标 → 抬起）
 let animTimer = null;
@@ -416,23 +416,27 @@ function animateBounds(to, dur = 240) {
 }
 
 // 卡片拖到屏幕上方 → 在当前位置收成灵动岛（横向不再要求居中）
-// 反向不自动发生：灵动岛可以拖到任意位置，只有双击 / 右键菜单才恢复卡片
+// 只有「从吸附区下方拖进吸附区」才收；已经贴在顶部的卡片怎么拖都不收，
+// 否则双击展开成卡片后会立刻又被吸回胶囊
 function maybeSnap() {
   if (animating || !win || win.isDestroyed()) return;
-  if (mode !== 'card') return;
+  if (mode !== 'card') { cardLastY = null; return; }
   const a = workArea();
   const b = win.getBounds();
-  if (b.y <= a.y + 48) enterIsland(b);
+  const inZone = b.y <= a.y + 48;
+  const entered = inZone && cardLastY !== null && cardLastY > a.y + 48;
+  cardLastY = b.y;
+  if (entered) enterIsland(b);
 }
 
 function enterIsland(from, keepY = false) {
   const a = workArea();
-  if (mode === 'card') cardPos = { x: from.x, y: from.y };  // 记住卡片位置，恢复时回到这里
   const cy = keepY ? from.y + from.height / 2 - ISLAND.h / 2 : a.y + 8;
   islandPos = clampIsland({ x: from.x + (from.width - ISLAND.w) / 2, y: cy });
   state.island = islandPos;
   writeState();
   mode = 'island'; hover = false;
+  cardLastY = null;
   pushMode(); setResizableForMode();
   animateBounds(islandBounds(), 240);
 }
@@ -440,33 +444,29 @@ function enterIsland(from, keepY = false) {
 // 吸成左右竖条（纵向沿用松手位置）
 function enterSide(edge, y) {
   if (!win || win.isDestroyed()) return;
-  if (mode === 'card') cardPos = win.getBounds();
   mode = edge === 'left' ? 'side-l' : 'side-r';
+  cardLastY = null;
   pushMode(); setResizableForMode();
   animateBounds(sideBounds(edge, y), 240);
   log('side-snap', { edge, y: y ?? null, to: sideBounds(edge, y) });
 }
 
+// 恢复卡片：以**胶囊当前的位置**为准展开——顶边不变、水平居中，
+// 不再回到「吸附前的那个卡片位置」（那样会视觉跳一下）
 function restoreCard() {
   if (!win || win.isDestroyed()) return;
+  const b = win.getBounds();
   mode = 'card'; hover = false;
-  const w = state.w || 384, h = state.h || 280;
+  cardLastY = null;                 // 展开后第一次移动只记录，不触发吸附
+  const w = state.w || 384, h = state.h || 340;
   const a = workArea();
-  let x, y;
-  if (cardPos) {
-    x = cardPos.x; y = cardPos.y; // 回到吸附前的位置
-  } else {
-    const b = win.getBounds();
-    x = Math.round(b.x + b.width / 2 - w / 2);
-    y = Math.round(b.y + b.height / 2 - h / 2);
-  }
+  let x = Math.round(b.x + b.width / 2 - w / 2);
+  let y = Math.round(b.y);
   x = Math.min(Math.max(x, a.x), a.x + a.width - w);
   y = Math.min(Math.max(y, a.y), a.y + a.height - h);
-  // 卡片原来就在「吸附区」里的话，恢复后随便一拖又会变回胶囊 → 往下推一点点
-  if (a.height >= h + 64) y = Math.max(y, a.y + 64);
-  cardPos = { x, y };
   pushMode(); setResizableForMode();
   animateBounds({ x, y, width: w, height: h }, 240);
+  log('restore', { from: { x: b.x, y: b.y }, to: { x, y } });
 }
 
 function setHover(v) {
