@@ -1,8 +1,14 @@
 # API 用量灵动岛（88API / APIMart 多站点监控）
 
-**结论：完全可行，而且已经跑通。** 88API 的后台是 new-api 内核（`v1.0.0-rc.46-88api.2`），它把每一次请求都写成一条消费日志，
-用「只读访问令牌」就能把 **模型 / 输入 token / 输出 token / 缓存 token / 金额 / 耗时 / 用的哪个 Key** 逐条拉下来。
-本目录就是一个零依赖的采集器 + 本地实时看板。
+一个常驻 Windows 桌面的用量挂件：实时显示 API 中转站账号的**余额、今日消费 / 请求 / token、按模型的调用次数与金额**。
+支持 **88API**（new-api 内核，只读访问令牌）和 **APIMart**（OpenAI 兼容网关，`sk-` Key）两个站点，可以只显示其中一个。
+
+- 形态：无边框透明**卡片 ↔ 顶部灵动岛胶囊 ↔ 贴边竖条**，都能拖动、置顶、不进任务栏、有托盘图标。
+- 「实时」= **轮询**（默认 5–15 秒）——站点只给查询接口，没有 WebSocket / SSE。
+- 88API 的每条消费日志都会落到本地 `data/logs.jsonl`，历史不依赖站点的 365 天保留期。
+- 附带 `dashboard.html` 网页版看板，挂件每轮顺手重写。
+
+当前版本 **v1.0.7**（见 `VERSION` / `CHANGELOG.md`）。
 
 ## 1. 原理
 
@@ -22,7 +28,7 @@
 
 ### 安装与首次配置（别人接入）
 
-> 依赖：Node.js（含 npm）+ Electron。挂件代码本身零依赖、无需编译。
+> 依赖：Node.js（含 npm，只在 `npm install` 用）+ Electron（运行时）。挂件代码本身没有运行依赖、不需要构建。
 
 **第 1 步 · 装 Electron**（在项目 `widget` 目录执行）：
 ```bash
@@ -126,15 +132,21 @@ node run.mjs serve 8788
 
 | 文件 | 作用 |
 | --- | --- |
-| `widget/main.js` | 主进程：轮询接口、去重落盘、聚合、通过 IPC 推给卡片 |
-| `widget/preload.js` | 只暴露 `onData` / `onPinned` / `act` 三个通道 |
-| `widget/index.html` | 卡片界面（自包含 CSS/JS，含 sparkline） |
-| `widget/package.json` | 让 electron 把该目录当应用入口 |
+| `widget/main.js` | 主进程：多站点轮询、形态状态机（卡片/胶囊/竖条）、托盘、菜单、IPC、拖动手势落点 |
+| `widget/preload.js` | contextBridge：`onData` / `onPinned` / `onMode` / `onOpenConfig` + `act()` |
+| `widget/index.html` | 全部界面（自包含 CSS/JS，含 sparkline、模型轮播、站点圆点、配置面板、拖动手势） |
+| `sync.mjs` / `apimart.mjs` | 两个站点的取数层（88API 逐条日志 / APIMart 聚合） |
+| `report.mjs` | 聚合与看板渲染（`dashboard.html`） |
+| `run.mjs` | 命令行：`sync` / `watch` / `serve`（挂件不需要） |
+| `selftest.mjs` / `rendercheck.mjs` | 自检：取数聚合链路 / 渲染层（假 DOM） |
+| `auth.example.json` | 凭据模板（复制成 `auth.json`，后者被 gitignore） |
 | `打开挂件.bat` | 正常启动（无控制台窗口） |
 | `创建桌面快捷方式.bat` | 在桌面建「API 用量灵动岛」图标（`create-shortcut.ps1` 干活，可重复运行） |
 | `诊断启动.bat` | 在控制台里启动，退出后打印退出码和 `widget/debug.log` 尾部 |
 | `安装开机自启.bat` / `移除开机自启.bat` | 在「启动」文件夹建/删快捷方式 |
 | `widget/88api.ico` / `make-ico.py` | 桌面图标本体（16–256 七种尺寸）与它的生成脚本 |
+| `docs/` | GitHub Pages 展示页（<https://mingmoumou.github.io/88api-usage/>） |
+| `HANDOFF.md` | 给接手开发的人/AI 的交接文档（架构、坑、回滚方法） |
 
 桌面快捷方式指向 `electron.exe` + `widget` 目录；挂件已在运行时双击它只会把已有窗口提到前面（单实例锁），不会开第二份。
 图标不直接引用工作区里的 `.ico`：`create-shortcut.ps1` 会把它复制到 `%LOCALAPPDATA%\88api-widget\icon.ico` 再让快捷方式指过去——桌面/资源管理器读不到工作区路径下的图标文件（沙箱 ACL），直接引用会在桌面上显示成空白文件图标。
@@ -145,8 +157,17 @@ Electron 通过 `npm install` 安装（或设环境变量 `API88_ELECTRON` 指�
 - 挂件和 `run.mjs serve` **不要同时跑**，两者都会写 `data/logs.jsonl`。
 - 挂件启动会写 `widget/debug.log`（boot / ready / before-quit 与异常堆栈），出问题先看它。
 
-## 5. 可以继续做
+## 5. 版本与回滚
 
-- 加阈值告警（今日消费 > N 元 / 余额 < N 元时托盘气泡提示）
+- 当前版本 `1.0.7`；每个版本都打了 git tag（`v1.0.0` … `v1.0.7`），改动明细见 `CHANGELOG.md`。
+- **升级**：`git pull`。本地 `auth.json`、`data/`、`widget/window.json` 都在 gitignore 里，不会被覆盖。
+- **回退**：`git checkout v1.0.6`（换成任意 tag 即可）。
+- 更细的架构说明、踩坑记录、接手提示词见 `HANDOFF.md`。
+
+## 6. 可以继续做
+
+- 加阈值告警（今日消费 > N 元 / 余额 < N 元时系统通知）
+- APIMart 显式走代理（`auth.json` 加 `proxy`，不依赖系统代理）
+- 打包成独立 exe（electron-builder），不再依赖外部 Electron
 - 按「项目」维度记账：给不同用途建不同 API Key，报表里天然按 `token_name` 分组
 - 把 `data/snapshot.json` 接进 Grafana / 飞书机器人日报
