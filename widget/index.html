@@ -443,7 +443,7 @@
   function renderDots() {
     const dots = $('dots');
     if (!dots) return;
-    if (allSites.length <= 1) { dots.style.display = 'none'; return; }
+    if (allSites.length <= 1) { dots.style.display = 'none'; dots.innerHTML = ''; return; }
     dots.style.display = 'flex';
     dots.innerHTML = allSites.map((s, i) => `<span class="dot-item${i === curIdx ? ' on' : ''}" data-i="${i}"></span>`).join('');
     dots.querySelectorAll('.dot-item').forEach((d) => {

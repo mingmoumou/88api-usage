@@ -37,6 +37,7 @@ let tray = null;
 let settings = null;
 let timer = null;
 let busy = false;
+let pendingTick = false;    // 拉取中收到的刷新请求（如切换站点），本轮结束后补跑
 let lastGood = null;
 let tickAt = 0;
 
@@ -50,9 +51,11 @@ let animTimer = null;
 let animating = false;
 
 // ---- 站点状态（多站点：88api / apimart）----
-let sites = [];             // 启用的站点 [{ id, name, type, apiKey }]
+let sites = [];             // 当前显示的站点（已按「不显示」过滤）
+let allSites = [];          // 已配置凭据的站点（含被隐藏的，右键菜单用）
 let siteData = {};          // id -> 站点数据（lastGood 格式）
 let currentSite = 0;        // 当前选中站点索引
+let currentSiteId = null;   // 当前选中站点 id（隐藏站点后仍能保持选择）
 
 let state = { x: null, y: null, w: 384, h: 340, poll: 15, pinned: true };
 try { Object.assign(state, JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'))); } catch { /* 首次运行用默认值 */ }
@@ -183,6 +186,22 @@ function loadSiteConfigs(sync) {
   return out;
 }
 
+// 被用户在右键菜单里隐藏的站点 id 集合（存在 window.json 的 hidden 数组）
+function hiddenSet() {
+  return new Set(Array.isArray(state.hidden) ? state.hidden : []);
+}
+
+// 切换某个站点显示/隐藏，立即重拉让界面马上反映
+function toggleSite(id) {
+  const set = hiddenSet();
+  if (set.has(id)) set.delete(id); else set.add(id);
+  state.hidden = [...set];
+  writeState();
+  log('toggle-site', { id, hidden: [...set] });
+  // 正在拉取时不要直接丢弃这次切换，等这一轮结束再补一次
+  if (busy) pendingTick = true; else tick();
+}
+
 // 88api 站点：拉日志 + 聚合（现有逻辑）
 async function tick88api(sync, report) {
   const { all, account, added } = await pull();
@@ -268,9 +287,16 @@ async function tick() {
       return;
     }
     const { sync, report } = await loadMods();
-    sites = loadSiteConfigs(sync);
+    // 一轮刷新只取一次时间：88api 与 APIMart 拉取耗时不同（APIMart 慢约 3 秒），
+    // 各取各的时间会让两个站点显示不一致
+    const cycleAt = new Date().toISOString();
+    allSites = loadSiteConfigs(sync);
+    const hidden = hiddenSet();
+    sites = allSites.filter((s) => !hidden.has(s.id));
     if (!sites.length) {
-      const payload = { sites: [{ ok: false, site: '88api', mode, error: '缺少 88API 访问令牌', empty: true, needToken: true }], current: 0 };
+      const payload = allSites.length
+        ? { sites: [{ ok: false, site: '', mode, error: '站点全部隐藏 · 右键菜单取消「不显示」即可恢复', empty: true }], current: 0 }
+        : { sites: [{ ok: false, site: '88api', mode, error: '缺少 88API 访问令牌', empty: true, needToken: true }], current: 0 };
       if (win && !win.isDestroyed()) win.webContents.send('data', payload);
       return;
     }
@@ -279,6 +305,7 @@ async function tick() {
         siteData[site.id] = site.type === '88api'
           ? await tick88api(sync, report)
           : await tickApimart(site);
+        siteData[site.id].updatedAt = cycleAt;   // 统一刷新时间
       } catch (e) {
         const raw = String(e && e.message || e);
         const needToken = raw.includes('缺少 88API 访问令牌');
@@ -292,7 +319,11 @@ async function tick() {
           : { ok: false, site: site.id, mode, error: msg, empty: true, needToken };
       }
     }
-    if (currentSite >= sites.length) currentSite = 0;
+    // 选中项按 id 记，站点被隐藏后自动落到第一个可见站点
+    let idx = sites.findIndex((s) => s.id === currentSiteId);
+    if (idx < 0) idx = 0;
+    currentSite = idx;
+    currentSiteId = sites[idx].id;
     const payload = { sites: sites.map(s => siteData[s.id]), current: currentSite };
     lastGood = siteData[sites[currentSite].id];
     if (win && !win.isDestroyed()) win.webContents.send('data', payload);
@@ -303,6 +334,7 @@ async function tick() {
     if (win && !win.isDestroyed()) win.webContents.send('data', payload);
   } finally {
     busy = false;
+    if (pendingTick) { pendingTick = false; tick(); }
   }
 }
 
@@ -529,6 +561,22 @@ function openMenu() {
       })),
     },
     { label: '立即刷新', click: () => tick() },
+    { type: 'separator' },
+    {
+      label: '不显示 88API',
+      type: 'checkbox',
+      checked: hiddenSet().has('88api'),
+      enabled: allSites.some((s) => s.id === '88api'),
+      click: () => toggleSite('88api'),
+    },
+    {
+      label: '不显示 APIMart',
+      type: 'checkbox',
+      checked: hiddenSet().has('apimart'),
+      enabled: allSites.some((s) => s.id === 'apimart'),
+      click: () => toggleSite('apimart'),
+    },
+    { type: 'separator' },
     { label: '配置站点凭据', click: () => { if (win && !win.isDestroyed()) win.webContents.send('open-config'); } },
     { type: 'separator' },
     { label: mode === 'card' ? '收起为灵动岛' : '恢复为卡片', click: () => { if (mode === 'card') snapToIsland(); else restoreCard(); } },
@@ -556,6 +604,7 @@ ipcMain.on('action', (_e, name, arg) => {
   else if (name === 'hover') setHover(!!arg);
   else if (name === 'restore') restoreCard();
   else if (name === 'to-island') snapToIsland();
+  else if (name === 'toggle-site') toggleSite(String(arg || ''));
   // 灵动岛拖动：用渲染层的 screenX/screenY 增量来挪窗口。
   // 不用 -webkit-app-region:drag，是因为它会把 hover / 双击事件吞掉，胶囊就没法双击展开了。
   else if (name === 'drag-start') { dragging = mode === 'island' || isSide(mode); }
@@ -594,6 +643,7 @@ ipcMain.on('action', (_e, name, arg) => {
     const i = Number(arg);
     if (sites.length && i >= 0 && i < sites.length) {
       currentSite = i;
+      currentSiteId = sites[i].id;
       const payload = { sites: sites.map(s => siteData[s.id]), current: currentSite };
       if (win && !win.isDestroyed()) win.webContents.send('data', payload);
     }
